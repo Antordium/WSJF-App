@@ -1,10 +1,7 @@
 import React from 'react';
-// @ts-ignore
 import ReactDOM from 'react-dom/client';
 import reactToWebComponent from 'react-to-webcomponent';
 import WSJFApp from './page';
-// @ts-ignore
-// import styles from './globals.css?inline';
 import styles from './wsjf-app-style';
 
 const Base = reactToWebComponent(WSJFApp, React, ReactDOM) as typeof HTMLElement;
