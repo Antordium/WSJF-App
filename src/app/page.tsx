@@ -1,8 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Trash2, PlusCircle, HelpCircle, Database, Download } from 'lucide-react';
-import { exportToPDF, validateExportData } from '../utils/pdfExport';
+import { Trash2, PlusCircle, HelpCircle, Database } from 'lucide-react';
 
 // --- Constants for Scoring ---
 const ALLOWED_SCORES = [1, 3, 6, 8, 10];
@@ -60,6 +59,7 @@ interface ScoringSliderProps {
   label: string;
   definitions: Record<number, string>;
 }
+
 const ScoringSlider = ({
   name,
   value,
@@ -69,7 +69,7 @@ const ScoringSlider = ({
   definitions,
 }: ScoringSliderProps): React.JSX.Element => {
   const valueIndex = ALLOWED_SCORES.indexOf(value);
-  const handleChange = (e: { target: { value: string } }) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newIndex = parseInt(e.target.value, 10);
     const newValue = ALLOWED_SCORES[newIndex];
     handler({ target: { name: name, value: newValue } });
@@ -110,12 +110,13 @@ interface FibonacciSliderProps {
   tooltipText: string;
   label: string;
 }
+
 const FibonacciSlider = ({ name, value, handler, tooltipText, label }: FibonacciSliderProps) => {
   let valueIndex = FIBONACCI_SCORES.indexOf(value);
   if (valueIndex === -1) {
     valueIndex = 4; // Corresponds to 8
   }
-  const handleChange = (e: { target: { value: string } }) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newIndex = parseInt(e.target.value, 10);
     const newValue = FIBONACCI_SCORES[newIndex];
     handler({ target: { name, value: newValue } });
@@ -148,6 +149,7 @@ const FibonacciSlider = ({ name, value, handler, tooltipText, label }: Fibonacci
 interface ConfigPanelProps {
   onConfigTest: () => void;
 }
+
 const ConfigPanel = ({ onConfigTest }: ConfigPanelProps) => (
   <div className="bg-yellow-900/20 border border-yellow-600 rounded-lg p-4 mb-6">
     <div className="flex items-center justify-between">
@@ -180,17 +182,11 @@ interface Initiative {
   jobSize: number;
 }
 
-interface InitiativeWithWSJF extends Initiative {
-  costOfDelay: number;
-  wsjf: number;
-}
-
 function WSJFApp() {
   // --- State Management ---
   const [initiatives, setInitiatives] = useState<Initiative[]>([]);
   const [weights, setWeights] = useState({ uv: 1, tc: 1, rr: 1, cr: 1 });
   const [isLoading, setIsLoading] = useState(true);
-  const [isExporting, setIsExporting] = useState(false);
   const [newInitiative, setNewInitiative] = useState({
     name: '',
     uv: 3,
@@ -199,7 +195,7 @@ function WSJFApp() {
     cr: 1,
     jobSize: 8,
   });
-  
+
   // --- Tooltip Content ---
   const tooltips = {
     uv: 'User Value / Training Readiness Impact: How much value this delivers to the user, reducing manual effort or enabling critical training functionality.',
@@ -209,7 +205,7 @@ function WSJFApp() {
     jobSize:
       "Job Size (Story Points): The development team's estimate of the effort required, using Fibonacci sequence numbers.",
   };
-  
+
   // --- Initialization ---
   useEffect(() => {
     // Simulate loading time and initialization
@@ -218,21 +214,21 @@ function WSJFApp() {
     }, 1000);
     return () => clearTimeout(timer);
   }, []);
-  
+
   // --- Handlers ---
-  const handleWeightChange = (e: { target: { name: any; value: any } }) => {
+  const handleWeightChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setWeights((prev) => ({ ...prev, [name]: Number(value) }));
   };
-  
-  const handleInitiativeChange = (e: { target: { name: any; value: any } }) => {
+
+  const handleInitiativeChange = (e: React.ChangeEvent<HTMLInputElement> | { target: { name: string; value: any } }) => {
     const { name, value } = e.target;
     setNewInitiative((prev) => ({
       ...prev,
       [name]: name === 'name' ? value : Number(value),
     }));
   };
-  
+
   const addInitiative = () => {
     if (!newInitiative.name.trim()) return;
     const initiative: Initiative = {
@@ -243,11 +239,11 @@ function WSJFApp() {
     setInitiatives((prev) => [...prev, initiative]);
     setNewInitiative({ name: '', uv: 3, tc: 3, rr: 3, cr: 1, jobSize: 8 });
   };
-  
+
   const deleteInitiative = (id: string) => {
     setInitiatives((prev) => prev.filter((item) => item.id !== id));
   };
-  
+
   const testConfiguration = () => {
     const config = {
       storageMode: 'in-memory',
@@ -257,31 +253,8 @@ function WSJFApp() {
     alert(`Configuration Test:\n${JSON.stringify(config, null, 2)}`);
   };
 
-  const handleExportPDF = async () => {
-    setIsExporting(true);
-    try {
-      const exportData = {
-        initiatives: rankedInitiatives,
-        weights
-      };
-      
-      const validationError = validateExportData(exportData);
-      if (validationError) {
-        alert(validationError);
-        return;
-      }
-      
-      exportToPDF(exportData);
-    } catch (error) {
-      console.error('Error exporting PDF:', error);
-      alert('Failed to export PDF. Please try again.');
-    } finally {
-      setIsExporting(false);
-    }
-  };
-  
   // --- WSJF Calculation ---
-  const rankedInitiatives: InitiativeWithWSJF[] = useMemo(() => {
+  const rankedInitiatives = useMemo(() => {
     return initiatives
       .map((initiative) => {
         const { uv, tc, rr, cr, jobSize } = initiative;
@@ -292,7 +265,7 @@ function WSJFApp() {
       })
       .sort((a, b) => b.wsjf - a.wsjf);
   }, [initiatives, weights]);
-  
+
   // --- UI Rendering ---
   const renderWeightSlider = (
     name: string,
@@ -323,7 +296,7 @@ function WSJFApp() {
       />
     </div>
   );
-  
+
   // Loading state
   if (isLoading) {
     return (
@@ -347,62 +320,37 @@ function WSJFApp() {
       </div>
     );
   }
-  
+
   return (
     <div className="min-h-screen bg-gray-900 text-white font-sans p-4 sm:p-6 lg:p-8">
       <style>{`
-                .range-thumb::-webkit-slider-thumb {
-                    -webkit-appearance: none;
-                    appearance: none;
-                    width: 20px;
-                    height: 20px;
-                    background: #60a5fa;
-                    cursor: pointer;
-                    border-radius: 50%;
-                    border: 2px solid #1f2937;
-                }
-                .range-thumb::-moz-range-thumb {
-                    width: 20px;
-                    height: 20px;
-                    background: #60a5fa;
-                    cursor: pointer;
-                    border-radius: 50%;
-                    border: 2px solid #1f2937;
-                }
-            `}</style>
+        .range-thumb::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          appearance: none;
+          width: 20px;
+          height: 20px;
+          background: #60a5fa;
+          cursor: pointer;
+          border-radius: 50%;
+          border: 2px solid #1f2937;
+        }
+        .range-thumb::-moz-range-thumb {
+          width: 20px;
+          height: 20px;
+          background: #60a5fa;
+          cursor: pointer;
+          border-radius: 50%;
+          border: 2px solid #1f2937;
+        }
+      `}</style>
       <div className="max-w-7xl mx-auto">
         <header className="mb-8 text-center">
-          <div className="flex items-center justify-center gap-4 mb-4">
-            <h1 className="text-4xl font-bold text-blue-400">WSJF Prioritization Calculator</h1>
-            <button
-              onClick={handleExportPDF}
-              disabled={isExporting || rankedInitiatives.length === 0}
-              className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-green-500 transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
-              title={rankedInitiatives.length === 0 ? "Add initiatives to enable PDF export" : "Export to PDF"}
-            >
-              {isExporting ? (
-                <>
-                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Exporting...
-                </>
-              ) : (
-                <>
-                  <Download className="w-4 h-4 mr-2" />
-                  Export PDF
-                </>
-              )}
-            </button>
-          </div>
+          <h1 className="text-4xl font-bold text-blue-400">WSJF Prioritization Calculator</h1>
           <p className="mt-2 text-lg text-gray-400">
             Prioritize initiatives by calculating Weighted Shortest Job First.
           </p>
         </header>
-        
         <ConfigPanel onConfigTest={testConfiguration} />
-        
         <div className="bg-gray-800 p-6 rounded-xl shadow-lg mb-8">
           <h2 className="text-2xl font-semibold mb-4 text-white">Cost of Delay Weights</h2>
           <p className="text-gray-400 mb-6">
@@ -415,7 +363,6 @@ function WSJFApp() {
             {renderWeightSlider('cr', weights.cr, handleWeightChange, tooltips.cr, 'Compliance')}
           </div>
         </div>
-        
         <div className="bg-gray-800 p-6 rounded-xl shadow-lg mb-8">
           <h2 className="text-2xl font-semibold mb-4 text-white">Add New Initiative</h2>
           <div className="space-y-6">
@@ -486,7 +433,6 @@ function WSJFApp() {
             </div>
           </div>
         </div>
-        
         <div className="overflow-x-auto bg-gray-800 rounded-xl shadow-lg">
           <table className="min-w-full divide-y divide-gray-700">
             <thead className="bg-gray-700/50">
