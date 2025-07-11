@@ -1,34 +1,33 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Enable experimental features for better compatibility
+  experimental: {
+    // Enable optimizePackageImports for better performance
+    optimizePackageImports: ['lucide-react'],
+  },
+  // Ensure TypeScript checking is strict
+  typescript: {
+    // During builds, continue even if there are type errors
+    ignoreBuildErrors: false,
+  },
+  // ESLint configuration
+  eslint: {
+    // Run ESLint during builds
+    ignoreDuringBuilds: false,
+  },
+  // Configure output for static export if needed
   // output: 'export',
   
-  // Webpack configuration for PDF libraries
-  webpack: (config, { isServer }) => {
-    // Handle canvas dependency for jsPDF
-    if (!isServer) {
-      config.resolve.fallback = {
-        ...config.resolve.fallback,
-        canvas: false,
-        encoding: false,
-        fs: false,
-        path: false,
-        os: false,
-      };
-    }
+  // Add transpiling for any problematic packages
+  transpilePackages: [],
+  
+  // Configure webpack for better builds
+  webpack: (config, { dev, isServer }) => {
+    // Ensure proper handling of TypeScript files
+    config.resolve.extensions = ['.tsx', '.ts', '.jsx', '.js', ...config.resolve.extensions];
     
     return config;
-  },
-  
-  // Enable experimental features if needed
-  experimental: {
-    esmExternals: true,
-  },
-  
-  // Environment variables
-  env: {
-    CUSTOM_KEY: 'wsjf-calculator',
   },
 };
 
