@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "build:webcomponent": "tsup --config tsup.config.ts",
-    "build:css": "tailwindcss -i ./src/app/globals.css -o ./dist/wsjf-app.css --minify"
+    "build:css": "tailwindcss -i ./src/app/globals.css -o ./dist/wsjf-app.css --minify",
+    "build:all": "npm run build && npm run build:webcomponent && npm run build:css"
   },
   "dependencies": {
     "@r2wc/react-to-web-component": "^2.0.4",
