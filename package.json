@@ -8,12 +8,13 @@
     "start": "next start",
     "lint": "next lint",
     "build:webcomponent": "tsup --config tsup.config.ts",
-    "build:css": "tailwindcss -i ./src/app/globals.css -o ./dist/wsjf-app.css --minify",
-    "build:all": "npm run build && npm run build:webcomponent && npm run build:css"
+    "build:css": "tailwindcss -i ./src/app/globals.css -o ./dist/wsjf-app.css --minify"
   },
   "dependencies": {
     "@r2wc/react-to-web-component": "^2.0.4",
+    "@react-pdf/renderer": "^3.4.0",
     "@tailwindcss/cli": "^4.1.8",
+    "file-saver": "^2.0.5",
     "lucide-react": "^0.513.0",
     "next": "15.3.3",
     "react": "^19.0.0",
@@ -22,6 +23,7 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",
+    "@types/file-saver": "^2.0.7",
     "@types/node": "^20",
     "@types/react": "^19",
     "eslint": "^9",
