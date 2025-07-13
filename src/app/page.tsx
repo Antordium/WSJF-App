@@ -6,6 +6,8 @@ import { Trash2, PlusCircle, HelpCircle, Database, Download } from 'lucide-react
 // --- Constants for Scoring ---
 const ALLOWED_SCORES = [1, 3, 6, 8, 10];
 const FIBONACCI_SCORES = [1, 2, 3, 5, 8, 13, 21, 34, 55, 89];
+
+// Score definitions for tooltips
 const SCORE_DEFINITIONS = {
   uv: {
     1: 'Minor quality-of-life improvement, no direct impact on training effectiveness or time savings.',
@@ -59,6 +61,7 @@ interface ScoringSliderProps {
   label: string;
   definitions: Record<number, string>;
 }
+
 const ScoringSlider = ({
   name,
   value,
@@ -74,6 +77,7 @@ const ScoringSlider = ({
     handler({ target: { name: name, value: newValue } });
   };
   const currentDefinition = definitions[value];
+  
   return (
     <div className="flex-1 min-w-[200px] flex flex-col">
       <div className="flex items-center justify-between mb-1">
@@ -109,16 +113,19 @@ interface FibonacciSliderProps {
   tooltipText: string;
   label: string;
 }
+
 const FibonacciSlider = ({ name, value, handler, tooltipText, label }: FibonacciSliderProps) => {
   let valueIndex = FIBONACCI_SCORES.indexOf(value);
   if (valueIndex === -1) {
     valueIndex = 4; // Corresponds to 8
   }
+  
   const handleChange = (e: { target: { value: string } }) => {
     const newIndex = parseInt(e.target.value, 10);
     const newValue = FIBONACCI_SCORES[newIndex];
     handler({ target: { name, value: newValue } });
   };
+  
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
@@ -147,6 +154,7 @@ const FibonacciSlider = ({ name, value, handler, tooltipText, label }: Fibonacci
 interface ConfigPanelProps {
   onConfigTest: () => void;
 }
+
 const ConfigPanel = ({ onConfigTest }: ConfigPanelProps) => (
   <div className="bg-yellow-900/20 border border-yellow-600 rounded-lg p-4 mb-6">
     <div className="flex items-center justify-between">
@@ -167,51 +175,6 @@ const ConfigPanel = ({ onConfigTest }: ConfigPanelProps) => (
   </div>
 );
 
-// --- PDF Export Function ---
-const generatePDFContent = (initiatives: InitiativeWithWsjf[], weights: any) => {
-  const timestamp = new Date().toLocaleDateString();
-  
-  let content = `WSJF Prioritization Report
-Generated: ${timestamp}
-
-WEIGHTS CONFIGURATION:
-User Value: ${weights.uv}
-Time Criticality: ${weights.tc}
-Risk Reduction: ${weights.rr}
-Compliance: ${weights.cr}
-
-PRIORITIZED INITIATIVES:
-Rank | Initiative | CoD | Job Size | WSJF Score
------|-----------|-----|----------|----------
-`;
-
-  initiatives.forEach((item, index) => {
-    const rank = (index + 1).toString().padEnd(5);
-    const name = item.name.length > 30 ? item.name.substring(0, 27) + '...' : item.name.padEnd(30);
-    const cod = item.costOfDelay.toFixed(0).padEnd(5);
-    const jobSize = item.jobSize.toString().padEnd(9);
-    const wsjf = item.wsjf.toFixed(2);
-    
-    content += `${rank}| ${name} | ${cod}| ${jobSize}| ${wsjf}\n`;
-    content += `     | UV:${item.uv} TC:${item.tc} RR:${item.rr} CR:${item.cr}\n`;
-  });
-
-  return content;
-};
-
-const exportToPDF = (initiatives: InitiativeWithWsjf[], weights: any) => {
-  const content = generatePDFContent(initiatives, weights);
-  const blob = new Blob([content], { type: 'text/plain' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `wsjf-report-${new Date().toISOString().split('T')[0]}.txt`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-};
-
 // --- Main App Component ---
 interface Initiative {
   id: string;
@@ -222,11 +185,6 @@ interface Initiative {
   rr: number;
   cr: number;
   jobSize: number;
-}
-
-interface InitiativeWithWsjf extends Initiative {
-  costOfDelay: number;
-  wsjf: number;
 }
 
 function WSJFApp() {
@@ -260,6 +218,58 @@ function WSJFApp() {
     }, 1000);
     return () => clearTimeout(timer);
   }, []);
+
+  // --- PDF Export Function ---
+  const exportToPDF = async () => {
+    try {
+      // Dynamically import jsPDF and html2canvas
+      const [{ default: jsPDF }, { default: html2canvas }] = await Promise.all([
+        import('jspdf'),
+        import('html2canvas')
+      ]);
+
+      const element = document.getElementById('wsjf-table');
+      if (!element) return;
+
+      const canvas = await html2canvas(element, {
+        backgroundColor: '#1f2937',
+        scale: 2,
+        logging: false,
+        useCORS: true,
+      });
+
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('l', 'mm', 'a4');
+      
+      const imgWidth = 280;
+      const pageHeight = 210;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      let heightLeft = imgHeight;
+
+      let position = 15;
+
+      // Add title
+      pdf.setFontSize(16);
+      pdf.setTextColor(40);
+      pdf.text('WSJF Prioritization Matrix', 15, position);
+      position += 15;
+
+      pdf.addImage(imgData, 'PNG', 15, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft >= 0) {
+        position = heightLeft - imgHeight + 15;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 15, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+
+      pdf.save(`WSJF-Matrix-${new Date().toISOString().split('T')[0]}.pdf`);
+    } catch (error) {
+      console.error('Error exporting PDF:', error);
+      alert('Error exporting PDF. Please try again.');
+    }
+  };
 
   // --- Handlers ---
   const handleWeightChange = (e: { target: { name: any; value: any } }) => {
@@ -300,7 +310,7 @@ function WSJFApp() {
   };
 
   // --- WSJF Calculation ---
-  const rankedInitiatives = useMemo((): InitiativeWithWsjf[] => {
+  const rankedInitiatives = useMemo(() => {
     return initiatives
       .map((initiative) => {
         const { uv, tc, rr, cr, jobSize } = initiative;
@@ -368,231 +378,8 @@ function WSJFApp() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white font-sans p-4 sm:p-6 lg:p-8">
-      <style>{`
-        .range-thumb::-webkit-slider-thumb {
-          -webkit-appearance: none;
-          appearance: none;
-          width: 20px;
-          height: 20px;
-          background: #60a5fa;
-          cursor: pointer;
-          border-radius: 50%;
-          border: 2px solid #1f2937;
-        }
-        .range-thumb::-moz-range-thumb {
-          width: 20px;
-          height: 20px;
-          background: #60a5fa;
-          cursor: pointer;
-          border-radius: 50%;
-          border: 2px solid #1f2937;
-        }
-      `}</style>
-      <div className="max-w-7xl mx-auto">
-        <header className="mb-8 text-center">
-          <div className="flex items-center justify-center gap-4 mb-4">
-            <h1 className="text-4xl font-bold text-blue-400">WSJF Prioritization Calculator</h1>
-            <button
-              onClick={() => exportToPDF(rankedInitiatives, weights)}
-              className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
-              disabled={rankedInitiatives.length === 0}
-            >
-              <Download className="w-4 h-4" />
-              Export Report
-            </button>
-          </div>
-          <p className="mt-2 text-lg text-gray-400">
-            Prioritize initiatives by calculating Weighted Shortest Job First.
-          </p>
-        </header>
-
-        <ConfigPanel onConfigTest={testConfiguration} />
-
-        <div className="bg-gray-800 p-6 rounded-xl shadow-lg mb-8">
-          <h2 className="text-2xl font-semibold mb-4 text-white">Cost of Delay Weights</h2>
-          <p className="text-gray-400 mb-6">
-            Adjust the relative importance of each CoD component. These weights are determined by stakeholders.
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {renderWeightSlider('uv', weights.uv, handleWeightChange, tooltips.uv, 'User Value')}
-            {renderWeightSlider('tc', weights.tc, handleWeightChange, tooltips.tc, 'Time Criticality')}
-            {renderWeightSlider('rr', weights.rr, handleWeightChange, tooltips.rr, 'Risk Reduction')}
-            {renderWeightSlider('cr', weights.cr, handleWeightChange, tooltips.cr, 'Compliance')}
-          </div>
-        </div>
-
-        <div className="bg-gray-800 p-6 rounded-xl shadow-lg mb-8">
-          <h2 className="text-2xl font-semibold mb-4 text-white">Add New Initiative</h2>
-          <div className="space-y-6">
-            <div>
-              <label htmlFor="initiative-name" className="text-sm font-medium text-gray-300 mb-1 block">
-                Initiative Name
-              </label>
-              <input
-                type="text"
-                id="initiative-name"
-                name="name"
-                value={newInitiative.name}
-                onChange={handleInitiativeChange}
-                placeholder="e.g., Automate Training Readiness Report"
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
-                required
-              />
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-8">
-              <ScoringSlider
-                name="uv"
-                value={newInitiative.uv}
-                handler={handleInitiativeChange}
-                tooltipText={tooltips.uv}
-                label="User Value"
-                definitions={SCORE_DEFINITIONS.uv}
-              />
-              <ScoringSlider
-                name="tc"
-                value={newInitiative.tc}
-                handler={handleInitiativeChange}
-                tooltipText={tooltips.tc}
-                label="Time Criticality"
-                definitions={SCORE_DEFINITIONS.tc}
-              />
-              <ScoringSlider
-                name="rr"
-                value={newInitiative.rr}
-                handler={handleInitiativeChange}
-                tooltipText={tooltips.rr}
-                label="Risk Reduction"
-                definitions={SCORE_DEFINITIONS.rr}
-              />
-              <ScoringSlider
-                name="cr"
-                value={newInitiative.cr}
-                handler={handleInitiativeChange}
-                tooltipText={tooltips.cr}
-                label="Compliance"
-                definitions={SCORE_DEFINITIONS.cr}
-              />
-            </div>
-            <FibonacciSlider
-              name="jobSize"
-              value={newInitiative.jobSize}
-              handler={handleInitiativeChange}
-              tooltipText={tooltips.jobSize}
-              label="Job Size (Story Points)"
-            />
-            <div className="text-right">
-              <button
-                onClick={addInitiative}
-                className="inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-blue-500 transition-colors"
-              >
-                <PlusCircle className="w-5 h-5 mr-2" />
-                Add Initiative
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="overflow-x-auto bg-gray-800 rounded-xl shadow-lg">
-          <table className="min-w-full divide-y divide-gray-700">
-            <thead className="bg-gray-700/50">
-              <tr>
-                <th
-                  scope="col"
-                  className="px-6 py-4 text-left text-xs font-bold text-blue-300 uppercase tracking-wider"
-                >
-                  Rank
-                </th>
-                <th
-                  scope="col"
-                  className="py-4 text-left text-xs font-bold text-blue-300 uppercase tracking-wider min-w-[200px]"
-                >
-                  Initiative
-                </th>
-                <th
-                  scope="col"
-                  className="px-4 py-4 text-center text-xs font-bold text-blue-300 uppercase tracking-wider"
-                >
-                  CoD
-                </th>
-                <th
-                  scope="col"
-                  className="px-4 py-4 text-center text-xs font-bold text-blue-300 uppercase tracking-wider"
-                >
-                  Job Size
-                </th>
-                <th
-                  scope="col"
-                  className="px-6 py-4 text-center text-xs font-bold text-blue-300 uppercase tracking-wider"
-                >
-                  WSJF
-                </th>
-                <th
-                  scope="col"
-                  className="px-6 py-4 text-right text-xs font-bold text-blue-300 uppercase tracking-wider"
-                >
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-gray-800 divide-y divide-gray-700">
-              {rankedInitiatives.length > 0 ? (
-                rankedInitiatives.map((item, index) => (
-                  <tr key={item.id} className="hover:bg-gray-700/50 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span
-                        className={`flex items-center justify-center w-8 h-8 rounded-full font-bold text-lg ${
-                          index === 0
-                            ? 'bg-green-500 text-white'
-                            : index === 1
-                            ? 'bg-yellow-500 text-gray-900'
-                            : index === 2
-                            ? 'bg-orange-500 text-white'
-                            : 'bg-gray-600 text-gray-200'
-                        }`}
-                      >
-                        {index + 1}
-                      </span>
-                    </td>
-                    <td className="py-4 whitespace-nowrap">
-                      <div className="font-medium text-white">{item.name}</div>
-                      <div className="text-xs text-gray-400 mt-1">
-                        {`UV:${item.uv} | TC:${item.tc} | RR:${item.rr} | CR:${item.cr}`}
-                      </div>
-                    </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-center text-gray-300">
-                      {item.costOfDelay.toFixed(0)}
-                    </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-center text-gray-300">{item.jobSize}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center text-xl font-bold text-blue-400">
-                      {item.wsjf.toFixed(2)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right">
-                      <button
-                        onClick={() => deleteInitiative(item.id)}
-                        className="text-gray-500 hover:text-red-500 transition-colors p-2 rounded-full hover:bg-red-500/10"
-                      >
-                        <Trash2 className="w-5 h-5" />
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={6} className="text-center py-16 px-6">
-                    <h3 className="text-lg font-medium text-white">No initiatives yet.</h3>
-                    <p className="mt-1 text-sm text-gray-400">
-                      Use the form above to add your first software initiative.
-                    </p>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-export default WSJFApp;
+    <div className="min-h-screen bg-gray-900 text-white font-sans">
+      <div className="container mx-auto px-4 py-8">
+        <header className="text-center mb-8">
+          <h1 className="text-4xl font-bold mb-4 text-white">WSJF Prioritization Calculator</h1>
+          <p className="text-lg text-gray-400 max-w-2xl mx-auto">
