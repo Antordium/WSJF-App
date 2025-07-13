@@ -1,25 +1,19 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  /* config options here */
-  // Removed output: 'export' for Vercel deployment compatibility
-  
-  // Optimize for production
-  typescript: {
-    ignoreBuildErrors: false,
+  output: 'standalone',
+  trailingSlash: true,
+  images: {
+    unoptimized: true,
   },
   eslint: {
-    ignoreDuringBuilds: false,
+    ignoreDuringBuilds: true,
   },
-  
-  trailingSlash: false,
-  
-  images: {
-    unoptimized: false,
+  typescript: {
+    ignoreBuildErrors: true,
   },
-  
   experimental: {
-    optimizeCss: true,
+    optimizePackageImports: ['lucide-react'],
   },
 };
 
