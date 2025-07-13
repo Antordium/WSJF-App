@@ -1,17 +1,14 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  output: 'standalone',
-  trailingSlash: true,
-  images: {
-    unoptimized: true,
-  },
   eslint: {
-    ignoreDuringBuilds: true,
+    ignoreDuringBuilds: false,
   },
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
+  reactStrictMode: true,
+  swcMinify: true,
   experimental: {
     optimizePackageImports: ['lucide-react'],
   },
