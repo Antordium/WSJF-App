@@ -1,152 +1,124 @@
-# WSJF Calculator - Deployment Guide
+# WSJF Prioritization Calculator
 
-## Overview
-This is a Weighted Shortest Job First (WSJF) prioritization calculator with PDF export functionality, built with Next.js and deployable to Vercel.
-
-## New Features Added
-- **PDF Export**: Export prioritized initiatives to a professional PDF report
-- **Enhanced UI**: Export button in the header with loading states
-- **Data Validation**: Ensures data integrity before export
-- **Professional Reports**: Includes summary statistics, weights configuration, and formatted tables
-
-## Quick Deploy to Vercel
-
-### Option 1: Deploy via Vercel Dashboard
-1. Push your code to GitHub
-2. Go to [vercel.com](https://vercel.com)
-3. Click "New Project"
-4. Import your repository
-5. Vercel will automatically detect it's a Next.js app
-6. Click "Deploy"
-
-### Option 2: Deploy via Vercel CLI
-1. Install Vercel CLI: `npm i -g vercel`
-2. Run `vercel` in your project directory
-3. Follow the prompts
-4. Your app will be deployed automatically
-
-## Local Development
-
-### Prerequisites
-- Node.js 18+ 
-- npm or yarn
-
-### Setup
-1. Clone the repository
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-3. Run development server:
-   ```bash
-   npm run dev
-   ```
-4. Open [http://localhost:3000](http://localhost:3000)
-
-### Build for Production
-```bash
-npm run build
-npm start
-```
-
-## Project Structure
-```
-├── src/
-│   ├── app/
-│   │   ├── page.tsx              # Main WSJF calculator component
-│   │   ├── layout.tsx            # App layout
-│   │   ├── globals.css           # Global styles
-│   │   ├── wsjf-webcomponent.tsx # Web component version
-│   │   └── wsjf-app-style.ts     # Compiled styles
-│   ├── utils/
-│   │   └── pdfExport.ts          # PDF generation utilities
-│   └── types/
-│       └── pdf.d.ts              # TypeScript declarations
-├── public/                       # Static assets
-├── dist/                         # Built web component files
-└── ...config files
-```
+A comprehensive web application for prioritizing software initiatives using the Weighted Shortest Job First (WSJF) methodology. This tool helps teams make data-driven decisions about feature development priorities.
 
 ## Features
 
-### WSJF Calculator
-- **Cost of Delay Components**: User Value, Time Criticality, Risk Reduction, Compliance
-- **Weighted Scoring**: Customizable weights for each component
-- **Story Point Estimation**: Fibonacci sequence for job sizing
-- **Real-time Prioritization**: Automatic WSJF calculation and ranking
-- **Interactive UI**: Tooltips, sliders, and responsive design
+- **Interactive WSJF Calculation**: Calculate Cost of Delay and Job Size for initiatives
+- **Customizable Weights**: Adjust the relative importance of different Cost of Delay components
+- **Real-time Ranking**: See initiatives automatically ranked by WSJF score
+- **PDF Export**: Generate professional reports for stakeholders
+- **Responsive Design**: Works on desktop, tablet, and mobile devices
+- **Web Component Support**: Can be embedded in other applications
 
-### PDF Export
-- **Professional Reports**: Clean, formatted PDF output
-- **Summary Statistics**: Highest, lowest, and average WSJF scores
-- **Configuration Details**: Current weights and settings
-- **Detailed Tables**: All initiatives with complete scoring breakdown
-- **Automatic Naming**: Timestamped filenames for easy organization
+## Cost of Delay Components
 
-## Technical Details
+1. **User Value (UV)**: Impact on training effectiveness and user efficiency
+2. **Time Criticality (TC)**: Deadline dependencies and event-driven requirements
+3. **Risk Reduction (RR)**: Mitigation of operational and technical risks
+4. **Compliance/Regulatory (CR)**: Legal, regulatory, and SLA requirements
 
-### Dependencies Added
-- `jspdf`: PDF generation library
-- `jspdf-autotable`: Table formatting for PDFs
+## Getting Started
 
-### Browser Compatibility
-- Modern browsers with ES2017+ support
-- PDF generation works client-side (no server required)
-- Responsive design for mobile and desktop
+### Prerequisites
 
-### Performance
-- Client-side rendering for fast interactions
-- In-memory storage (session-based)
-- Optimized bundle with code splitting
+- Node.js 18+ 
+- npm, yarn, pnpm, or bun
 
-## Deployment Configuration
+### Installation
 
-### Vercel Settings
-- **Framework**: Next.js
-- **Build Command**: `npm run build`
-- **Output Directory**: `.next`
-- **Install Command**: `npm install`
+```bash
+# Clone the repository
+git clone <repository-url>
+cd wsjf-prioritization-calculator
 
-### Environment Variables
-No environment variables are required for basic functionality.
+# Install dependencies
+npm install
 
-### Build Optimizations
-- Tree shaking for smaller bundles
-- PDF libraries loaded on-demand
-- Tailwind CSS purging for optimal CSS size
+# Run the development server
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) to view the application.
+
+### Available Scripts
+
+- `npm run dev` - Start development server
+- `npm run build` - Build for production
+- `npm run start` - Start production server
+- `npm run lint` - Run ESLint
+- `npm run build:webcomponent` - Build as web component
+- `npm run build:css` - Build CSS for web component
+
+## Deployment
+
+### Vercel (Recommended)
+
+This application is optimized for Vercel deployment:
+
+1. Push your code to GitHub/GitLab/Bitbucket
+2. Connect your repository to Vercel
+3. Deploy automatically on every push
+
+### Manual Deployment
+
+```bash
+npm run build
+npm run start
+```
 
 ## Usage
 
-### Basic Workflow
-1. **Set Weights**: Adjust the importance of each Cost of Delay component
-2. **Add Initiatives**: Enter your software initiatives with scores
-3. **Review Rankings**: See real-time WSJF prioritization
-4. **Export Report**: Generate PDF for stakeholders
+1. **Set Weights**: Adjust the Cost of Delay component weights based on your organization's priorities
+2. **Add Initiatives**: Enter initiative details including name and scores for each component
+3. **Review Rankings**: View automatically calculated WSJF scores and rankings
+4. **Export Report**: Generate PDF reports for stakeholder communication
 
-### Scoring Guidelines
-- **User Value (1-10)**: Impact on end users and training effectiveness
-- **Time Criticality (1-10)**: Urgency and event dependencies
-- **Risk Reduction (1-10)**: Risk mitigation and opportunity enablement
-- **Compliance (1-10)**: Regulatory and SLA requirements
-- **Job Size (Fibonacci)**: Development effort estimation
+## WSJF Formula
 
-## Troubleshooting
+```
+WSJF = Cost of Delay / Job Size
 
-### Common Issues
-1. **PDF Export Fails**: Ensure you have initiatives added
-2. **Deployment Issues**: Check Node.js version (18+ required)
-3. **Build Errors**: Clear `.next` folder and rebuild
+Cost of Delay = (User Value × UV Weight) + 
+                (Time Criticality × TC Weight) + 
+                (Risk Reduction × RR Weight) + 
+                (Compliance × CR Weight)
+```
 
-### Support
-For issues specific to this implementation, check:
-- Browser console for JavaScript errors
-- Network tab for failed requests
-- Vercel dashboard for deployment logs
+## Technology Stack
 
-## Web Component Version
-The app also builds as a web component for embedding in other applications:
+- **Frontend**: Next.js 15, React 19, TypeScript
+- **Styling**: Tailwind CSS 4
+- **Icons**: Lucide React
+- **Build**: TSup for web components
+- **Deployment**: Vercel
+
+## Web Component Usage
+
+Build the web component and embed it in any website:
+
 ```bash
 npm run build:webcomponent
 ```
 
-This generates files in the `dist/` folder that can be included in any HTML page.
+```html
+<script src="./dist/wsjf-webcomponent.iife.js"></script>
+<wsjf-app></wsjf-app>
+```
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Acknowledgments
+
+- Based on the Weighted Shortest Job First methodology from SAFe (Scaled Agile Framework)
+- Built with modern web technologies for optimal performance and user experience
