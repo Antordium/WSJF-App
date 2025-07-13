@@ -1,11 +1,4 @@
 {
-  "version": 2,
-  "builds": [
-    {
-      "src": "package.json",
-      "use": "@vercel/next"
-    }
-  ],
-  "regions": ["iad1"],
-  "framework": "nextjs"
+  "framework": "nextjs",
+  "buildCommand": "npm run build"
 }
