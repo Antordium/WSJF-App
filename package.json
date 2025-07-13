@@ -1,13 +1,12 @@
 {
-  "name": "wsjf-prioritization-calculator",
-  "version": "1.0.0",
+  "name": "wsjf-app",
+  "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "export": "next export",
     "build:webcomponent": "tsup --config tsup.config.ts",
     "build:css": "tailwindcss -i ./src/app/globals.css -o ./dist/wsjf-app.css --minify"
   },
