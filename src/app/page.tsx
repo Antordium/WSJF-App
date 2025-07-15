@@ -383,3 +383,236 @@ function WSJFApp() {
         <header className="text-center mb-8">
           <h1 className="text-4xl font-bold mb-4 text-white">WSJF Prioritization Calculator</h1>
           <p className="text-lg text-gray-400 max-w-2xl mx-auto">
+            Weighted Shortest Job First (WSJF) helps teams prioritize features by balancing Cost of Delay with Job Size.
+          </p>
+        </header>
+
+        <ConfigPanel onConfigTest={testConfiguration} />
+
+        <div className="bg-gray-800 p-6 rounded-xl shadow-lg mb-8">
+          <h2 className="text-2xl font-semibold mb-4 text-white">Cost of Delay Weights</h2>
+          <p className="text-gray-400 mb-6">
+            Adjust the relative importance of each CoD component. These weights are determined by stakeholders.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {renderWeightSlider('uv', weights.uv, handleWeightChange, tooltips.uv, 'User Value')}
+            {renderWeightSlider('tc', weights.tc, handleWeightChange, tooltips.tc, 'Time Criticality')}
+            {renderWeightSlider('rr', weights.rr, handleWeightChange, tooltips.rr, 'Risk Reduction')}
+            {renderWeightSlider('cr', weights.cr, handleWeightChange, tooltips.cr, 'Compliance')}
+          </div>
+        </div>
+
+        <div className="bg-gray-800 p-6 rounded-xl shadow-lg mb-8">
+          <h2 className="text-2xl font-semibold mb-4 text-white">Add New Initiative</h2>
+          <div className="space-y-6">
+            <div>
+              <label htmlFor="initiative-name" className="text-sm font-medium text-gray-300 mb-1 block">
+                Initiative Name
+              </label>
+              <input
+                type="text"
+                id="initiative-name"
+                name="name"
+                value={newInitiative.name}
+                onChange={handleInitiativeChange}
+                placeholder="e.g., Automate Training Readiness Report"
+                className="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                required
+              />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-8">
+              <ScoringSlider
+                name="uv"
+                value={newInitiative.uv}
+                handler={handleInitiativeChange}
+                tooltipText={tooltips.uv}
+                label="User Value"
+                definitions={SCORE_DEFINITIONS.uv}
+              />
+              <ScoringSlider
+                name="tc"
+                value={newInitiative.tc}
+                handler={handleInitiativeChange}
+                tooltipText={tooltips.tc}
+                label="Time Criticality"
+                definitions={SCORE_DEFINITIONS.tc}
+              />
+              <ScoringSlider
+                name="rr"
+                value={newInitiative.rr}
+                handler={handleInitiativeChange}
+                tooltipText={tooltips.rr}
+                label="Risk Reduction"
+                definitions={SCORE_DEFINITIONS.rr}
+              />
+              <ScoringSlider
+                name="cr"
+                value={newInitiative.cr}
+                handler={handleInitiativeChange}
+                tooltipText={tooltips.cr}
+                label="Compliance"
+                definitions={SCORE_DEFINITIONS.cr}
+              />
+            </div>
+            <FibonacciSlider
+              name="jobSize"
+              value={newInitiative.jobSize}
+              handler={handleInitiativeChange}
+              tooltipText={tooltips.jobSize}
+              label="Job Size (Story Points)"
+            />
+            <div className="text-right">
+              <button
+                onClick={addInitiative}
+                className="inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-blue-500 transition-colors"
+              >
+                <PlusCircle className="w-5 h-5 mr-2" />
+                Add Initiative
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-gray-800 p-6 rounded-xl shadow-lg">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-semibold text-white">Prioritized Initiatives</h2>
+            {rankedInitiatives.length > 0 && (
+              <button
+                onClick={exportToPDF}
+                className="inline-flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Export PDF
+              </button>
+            )}
+          </div>
+          <div id="wsjf-table" className="overflow-x-auto bg-gray-800 rounded-xl shadow-lg">
+            <table className="min-w-full divide-y divide-gray-700">
+              <thead className="bg-gray-700/50">
+                <tr>
+                  <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-blue-300 uppercase tracking-wider">
+                    Rank
+                  </th>
+                  <th scope="col" className="py-4 text-left text-xs font-bold text-blue-300 uppercase tracking-wider min-w-[200px]">
+                    Initiative
+                  </th>
+                  <th scope="col" className="px-4 py-4 text-center text-xs font-bold text-blue-300 uppercase tracking-wider">
+                    CoD
+                  </th>
+                  <th scope="col" className="px-4 py-4 text-center text-xs font-bold text-blue-300 uppercase tracking-wider">
+                    Job Size
+                  </th>
+                  <th scope="col" className="px-6 py-4 text-center text-xs font-bold text-blue-300 uppercase tracking-wider">
+                    WSJF
+                  </th>
+                  <th scope="col" className="px-6 py-4 text-right text-xs font-bold text-blue-300 uppercase tracking-wider">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-gray-800 divide-y divide-gray-700">
+                {rankedInitiatives.length > 0 ? (
+                  rankedInitiatives.map((item, index) => (
+                    <tr key={item.id} className="hover:bg-gray-700/50 transition-colors">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span
+                          className={`flex items-center justify-center w-8 h-8 rounded-full font-bold text-lg ${
+                            index === 0
+                              ? 'bg-green-500 text-white'
+                              : index === 1
+                              ? 'bg-yellow-500 text-gray-900'
+                              : index === 2
+                              ? 'bg-orange-500 text-white'
+                              : 'bg-gray-600 text-gray-200'
+                          }`}
+                        >
+                          {index + 1}
+                        </span>
+                      </td>
+                      <td className="py-4 whitespace-nowrap">
+                        <div className="font-medium text-white">{item.name}</div>
+                        <div className="text-xs text-gray-400 mt-1">
+                          {`UV:${item.uv} | TC:${item.tc} | RR:${item.rr} | CR:${item.cr}`}
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-center text-gray-300">
+                        {item.costOfDelay.toFixed(0)}
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-center text-gray-300">{item.jobSize}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-center text-xl font-bold text-blue-400">
+                        {item.wsjf.toFixed(2)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right">
+                        <button
+                          onClick={() => deleteInitiative(item.id)}
+                          className="text-gray-500 hover:text-red-500 transition-colors p-2 rounded-full hover:bg-red-500/10"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={6} className="text-center py-16 px-6">
+                      <h3 className="text-lg font-medium text-white">No initiatives yet.</h3>
+                      <p className="mt-1 text-sm text-gray-400">
+                        Use the form above to add your first software initiative.
+                      </p>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default WSJFApp;
+2. src/app/layout.tsx
+typescriptimport type { Metadata } from "next";
+import { Geist, Geist_Mono } from "next/font/google";
+import "./globals.css";
+
+const geistSans = Geist({
+  variable: "--font-geist-sans",
+  subsets: ["latin"],
+});
+
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
+  subsets: ["latin"],
+});
+
+export const metadata: Metadata = {
+  title: "WSJF Prioritization Calculator",
+  description: "Weighted Shortest Job First (WSJF) prioritization tool for agile teams. Balance Cost of Delay with Job Size to make data-driven feature prioritization decisions.",
+  keywords: ["WSJF", "prioritization", "agile", "scrum", "project management", "cost of delay", "job size"],
+  authors: [{ name: "WSJF Development Team" }],
+  viewport: "width=device-width, initial-scale=1",
+  robots: "index, follow",
+  openGraph: {
+    title: "WSJF Prioritization Calculator",
+    description: "Data-driven feature prioritization using Weighted Shortest Job First methodology",
+    type: "website",
+  },
+};
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html lang="en">
+      <body
+        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+      >
+        {children}
+      </body>
+    </html>
+  );
+}
