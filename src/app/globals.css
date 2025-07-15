@@ -26,7 +26,7 @@ body {
     rgb(var(--background-start-rgb));
 }
 
-/* Custom range slider styles */
+/* Custom range slider styles for better UX */
 .range-thumb {
   -webkit-appearance: none;
   appearance: none;
@@ -42,6 +42,12 @@ body {
   cursor: pointer;
   border: 2px solid #1e40af;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  transition: all 0.2s ease;
+}
+
+.range-thumb::-webkit-slider-thumb:hover {
+  background: #2563eb;
+  transform: scale(1.1);
 }
 
 .range-thumb::-moz-range-thumb {
@@ -52,6 +58,12 @@ body {
   cursor: pointer;
   border: 2px solid #1e40af;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  transition: all 0.2s ease;
+}
+
+.range-thumb::-moz-range-thumb:hover {
+  background: #2563eb;
+  transform: scale(1.1);
 }
 
 /* Loading animation */
@@ -64,3 +76,67 @@ body {
 .animate-spin {
   animation: spin 1s linear infinite;
 }
+
+/* Improved focus styles for accessibility */
+.focus\:ring-2:focus {
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px #3b82f6;
+}
+
+/* Print styles for PDF generation */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  
+  body {
+    background: white !important;
+    color: black !important;
+  }
+}
+4. next.config.ts
+typescriptimport type { NextConfig } from 'next';
+
+const nextConfig: NextConfig = {
+  eslint: {
+    ignoreDuringBuilds: false,
+  },
+  typescript: {
+    ignoreBuildErrors: false,
+  },
+  reactStrictMode: true,
+  swcMinify: true,
+  poweredByHeader: false,
+  compress: true,
+  experimental: {
+    optimizePackageImports: ['lucide-react'],
+    optimizeCss: true,
+  },
+  images: {
+    formats: ['image/webp', 'image/avif'],
+  },
+  headers: async () => {
+    return [
+      {
+        source: '/(.*)',
+        headers: [
+          {
+            key: 'X-Frame-Options',
+            value: 'DENY',
+          },
+          {
+            key: 'X-Content-Type-Options',
+            value: 'nosniff',
+          },
+          {
+            key: 'Referrer-Policy',
+            value: 'strict-origin-when-cross-origin',
+          },
+        ],
+      },
+    ];
+  },
+};
+
+export default nextConfig;
