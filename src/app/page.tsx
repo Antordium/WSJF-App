@@ -117,7 +117,7 @@ interface FibonacciSliderProps {
 const FibonacciSlider = ({ name, value, handler, tooltipText, label }: FibonacciSliderProps) => {
   let valueIndex = FIBONACCI_SCORES.indexOf(value);
   if (valueIndex === -1) {
-    valueIndex = 4; // Corresponds to 8
+    valueIndex = 4;
   }
   
   const handleChange = (e: { target: { value: string } }) => {
@@ -188,7 +188,6 @@ interface Initiative {
 }
 
 function WSJFApp() {
-  // --- State Management ---
   const [initiatives, setInitiatives] = useState<Initiative[]>([]);
   const [weights, setWeights] = useState({ uv: 1, tc: 1, rr: 1, cr: 1 });
   const [isLoading, setIsLoading] = useState(true);
@@ -201,7 +200,6 @@ function WSJFApp() {
     jobSize: 8,
   });
 
-  // --- Tooltip Content ---
   const tooltips = {
     uv: 'User Value / Training Readiness Impact: How much value this delivers to the user, reducing manual effort or enabling critical training functionality.',
     tc: 'Time Criticality / Event Dependency: Is there a specific deadline or event where delays would have severe consequences?',
@@ -210,19 +208,15 @@ function WSJFApp() {
     jobSize: "Job Size (Story Points): The development team's estimate of the effort required, using Fibonacci sequence numbers.",
   };
 
-  // --- Initialization ---
   useEffect(() => {
-    // Simulate loading time and initialization
     const timer = setTimeout(() => {
       setIsLoading(false);
     }, 1000);
     return () => clearTimeout(timer);
   }, []);
 
-  // --- PDF Export Function ---
   const exportToPDF = async () => {
     try {
-      // Dynamically import jsPDF and html2canvas
       const [{ default: jsPDF }, { default: html2canvas }] = await Promise.all([
         import('jspdf'),
         import('html2canvas')
@@ -248,7 +242,6 @@ function WSJFApp() {
 
       let position = 15;
 
-      // Add title
       pdf.setFontSize(16);
       pdf.setTextColor(40);
       pdf.text('WSJF Prioritization Matrix', 15, position);
@@ -271,7 +264,6 @@ function WSJFApp() {
     }
   };
 
-  // --- Handlers ---
   const handleWeightChange = (e: { target: { name: any; value: any } }) => {
     const { name, value } = e.target;
     setWeights((prev) => ({ ...prev, [name]: Number(value) }));
@@ -309,7 +301,6 @@ function WSJFApp() {
     alert(`Configuration Test:\n${JSON.stringify(config, null, 2)}`);
   };
 
-  // --- WSJF Calculation ---
   const rankedInitiatives = useMemo(() => {
     return initiatives
       .map((initiative) => {
@@ -322,7 +313,6 @@ function WSJFApp() {
       .sort((a, b) => b.wsjf - a.wsjf);
   }, [initiatives, weights]);
 
-  // --- UI Rendering ---
   const renderWeightSlider = (
     name: string,
     value: number,
@@ -353,7 +343,6 @@ function WSJFApp() {
     </div>
   );
 
-  // Loading state
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-900 text-white">
@@ -490,4 +479,85 @@ function WSJFApp() {
             <table className="min-w-full divide-y divide-gray-700">
               <thead className="bg-gray-700/50">
                 <tr>
-                  <th scope
+                  <th scope="col" className="px-6 py-4 text-left text-xs font-bold text-blue-300 uppercase tracking-wider">
+                    Rank
+                  </th>
+                  <th scope="col" className="py-4 text-left text-xs font-bold text-blue-300 uppercase tracking-wider min-w-[200px]">
+                    Initiative
+                  </th>
+                  <th scope="col" className="px-4 py-4 text-center text-xs font-bold text-blue-300 uppercase tracking-wider">
+                    CoD
+                  </th>
+                  <th scope="col" className="px-4 py-4 text-center text-xs font-bold text-blue-300 uppercase tracking-wider">
+                    Job Size
+                  </th>
+                  <th scope="col" className="px-6 py-4 text-center text-xs font-bold text-blue-300 uppercase tracking-wider">
+                    WSJF
+                  </th>
+                  <th scope="col" className="px-6 py-4 text-right text-xs font-bold text-blue-300 uppercase tracking-wider">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-gray-800 divide-y divide-gray-700">
+                {rankedInitiatives.length > 0 ? (
+                  rankedInitiatives.map((item, index) => (
+                    <tr key={item.id} className="hover:bg-gray-700/50 transition-colors">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span
+                          className={`flex items-center justify-center w-8 h-8 rounded-full font-bold text-lg ${
+                            index === 0
+                              ? 'bg-green-500 text-white'
+                              : index === 1
+                              ? 'bg-yellow-500 text-gray-900'
+                              : index === 2
+                              ? 'bg-orange-500 text-white'
+                              : 'bg-gray-600 text-gray-200'
+                          }`}
+                        >
+                          {index + 1}
+                        </span>
+                      </td>
+                      <td className="py-4 whitespace-nowrap">
+                        <div className="font-medium text-white">{item.name}</div>
+                        <div className="text-xs text-gray-400 mt-1">
+                          {`UV:${item.uv} | TC:${item.tc} | RR:${item.rr} | CR:${item.cr}`}
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-center text-gray-300">
+                        {item.costOfDelay.toFixed(0)}
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-center text-gray-300">{item.jobSize}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-center text-xl font-bold text-blue-400">
+                        {item.wsjf.toFixed(2)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right">
+                        <button
+                          onClick={() => deleteInitiative(item.id)}
+                          className="text-gray-500 hover:text-red-500 transition-colors p-2 rounded-full hover:bg-red-500/10"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={6} className="text-center py-16 px-6">
+                      <h3 className="text-lg font-medium text-white">No initiatives yet.</h3>
+                      <p className="mt-1 text-sm text-gray-400">
+                        Use the form above to add your first software initiative.
+                      </p>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default WSJFApp;
