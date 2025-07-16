@@ -13,16 +13,20 @@
   "dependencies": {
     "@r2wc/react-to-web-component": "^2.0.4",
     "@tailwindcss/cli": "^4.1.8",
+    "jspdf": "^2.5.1",
+    "jspdf-autotable": "^3.8.3",
     "lucide-react": "^0.513.0",
     "next": "15.3.3",
     "react": "^19.0.0",
-    "tsup": "^8.5.0"
+    "tsup": "^8.5.0",
+    "uuid": "^10.0.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
+    "@types/uuid": "^10.0.0",
     "eslint": "^9",
     "eslint-config-next": "15.3.3",
     "react-dom": "^19.1.0",
