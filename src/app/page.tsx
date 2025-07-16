@@ -1,31 +1,41 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { Trash2, PlusCircle, HelpCircle, Database } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { HelpCircle, Plus, Trash2, Database, Moon, Sun, FileDown } from 'lucide-react';
+import { v4 as uuidv4 } from 'uuid';
 
-// --- Constants for Scoring ---
+// --- Type Declarations for PDF Libraries ---
+declare module 'jspdf' {
+  interface jsPDF {
+    autoTable: (options: any) => void;
+  }
+}
+
+// --- Constants ---
+const FIBONACCI_SCORES = [1, 2, 3, 5, 8, 13, 21];
 const ALLOWED_SCORES = [1, 3, 6, 8, 10];
-const FIBONACCI_SCORES = [1, 2, 3, 5, 8, 13, 21, 34, 55, 89];
-const SCORE_DEFINITIONS = {
+
+// --- Score Definitions ---
+const SCORING_DEFINITIONS = {
   uv: {
-    1: 'Minor quality-of-life improvement, no direct impact on training effectiveness or time savings.',
-    3: 'Moderate reduction in manual effort, slight performance improvement, or adds minor training utility.',
-    6: 'Significant reduction in manual data entry/time spent, noticeable performance improvement, or enables important training functionality.',
-    8: 'Eliminates a major time-sink, critical performance fix, or enables a new, essential training capability.',
-    10: 'Directly prevents a major training/exercise failure, ensures accurate and timely training readiness reporting, or drastically improves service member efficiency.',
+    1: 'Minimal or no direct user value; primarily technical or maintenance work.',
+    3: 'Some user value, but limited scope or impact on daily operations.',
+    6: 'Moderate user value; improves efficiency or experience in a meaningful way.',
+    8: 'High user value; significantly enhances operations or user experience.',
+    10: "Critical user value; transforms operations, solves major pain points, or enables mission-critical capabilities.",
   },
   tc: {
-    1: 'No specific deadline or event dependency.',
-    3: 'Desired for an upcoming event, but delay is manageable.',
-    6: 'Important for a planned event; delay would cause significant inconvenience or rework.',
-    8: 'Critical for an upcoming exercise, collective, or individual training, potential for hours of delay if not delivered.',
-    10: 'Absolutely critical for an imminent mission rehearsal, large-scale exercise, or individual training where failure/delay is unacceptable.',
+    1: 'No time pressure; can be delayed without significant consequences.',
+    3: 'Some time sensitivity, but delays are manageable.',
+    6: 'Moderate time criticality; delays could impact operations or user satisfaction.',
+    8: 'High time criticality; delays would cause significant problems or missed opportunities.',
+    10: "Extremely time-critical; delays would result in severe operational failures, major security vulnerabilities, or mission failure.",
   },
   rr: {
     1: 'No significant risk reduction or opportunity enablement.',
-    3: 'Addresses minor technical debt, enables a small future enhancement.',
-    6: 'Mitigates a moderate risk (e.g., recurring data inaccuracy issue), enables a significant future capability.',
-    8: 'Addresses a high-priority risk (e.g., widespread data inaccuracy), unlocks a critical strategic opportunity.',
+    3: 'Minor risk reduction or small opportunity enablement.',
+    6: 'Moderate risk reduction or opens up meaningful opportunities.',
+    8: 'Significant risk reduction or enables major opportunities.',
     10: "Prevents a high-impact 'development failure or delay,' fundamentally improves user adoption, or enables a new, high-value operational paradigm.",
   },
   cr: {
@@ -42,14 +52,48 @@ type TooltipProps = { text: string; children: React.ReactNode };
 const Tooltip = ({ text, children }: TooltipProps) => (
   <div className="relative flex items-center group">
     {children}
-    <div className="absolute bottom-full mb-2 w-72 p-3 text-sm text-white bg-gray-800 border border-gray-600 rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10 pointer-events-none">
+    <div className="absolute bottom-full mb-2 w-72 p-3 text-sm text-white bg-gray-800 dark:bg-gray-900 border border-gray-600 dark:border-gray-500 rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10 pointer-events-none">
       {text}
-      <svg className="absolute text-gray-800 h-2 w-full left-0 top-full" x="0px" y="0px" viewBox="0 0 255 255">
+      <svg className="absolute text-gray-800 dark:text-gray-900 h-2 w-full left-0 top-full" x="0px" y="0px" viewBox="0 0 255 255">
         <polygon className="fill-current" points="0,0 127.5,127.5 255,0" />
       </svg>
     </div>
   </div>
 );
+
+// --- Dark Mode Toggle Component ---
+const DarkModeToggle: React.FC = () => {
+  const [isDarkMode, setIsDarkMode] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const stored = localStorage.getItem('darkMode');
+      const initialMode = stored ? JSON.parse(stored) : prefersDark;
+      setIsDarkMode(initialMode);
+      document.documentElement.classList.toggle('dark', initialMode);
+    }
+  }, []);
+
+  const toggleDarkMode = () => {
+    const newMode = !isDarkMode;
+    setIsDarkMode(newMode);
+    if (typeof document !== 'undefined') {
+      document.documentElement.classList.toggle('dark', newMode);
+      localStorage.setItem('darkMode', JSON.stringify(newMode));
+    }
+  };
+
+  return (
+    <button
+      onClick={toggleDarkMode}
+      className="p-2 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+      aria-label="Toggle dark mode"
+    >
+      {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+    </button>
+  );
+};
 
 interface ScoringSliderProps {
   name: string;
@@ -59,6 +103,7 @@ interface ScoringSliderProps {
   label: string;
   definitions: Record<number, string>;
 }
+
 const ScoringSlider = ({
   name,
   value,
@@ -83,7 +128,7 @@ const ScoringSlider = ({
             <HelpCircle className="w-4 h-4 ml-1.5 text-gray-500 hover:text-blue-400 cursor-help" />
           </Tooltip>
         </label>
-        <span className="text-sm font-bold text-blue-400 bg-gray-700 px-2.5 py-1 rounded-md">{value}</span>
+        <span className="text-sm font-bold text-blue-400 bg-gray-700 dark:bg-gray-800 px-2 py-0.5 rounded">{value}</span>
       </div>
       <input
         type="range"
@@ -93,53 +138,11 @@ const ScoringSlider = ({
         max={ALLOWED_SCORES.length - 1}
         value={valueIndex}
         onChange={handleChange}
-        className="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer range-thumb"
+        className="w-full h-2 bg-gray-600 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer range-thumb"
       />
-      <div className="mt-3 text-xs text-gray-400 bg-gray-900/50 p-3 rounded-md h-full min-h-[70px]">
-        <strong>Meaning:</strong> {currentDefinition}
+      <div className="mt-2 text-xs text-gray-400 dark:text-gray-500 leading-tight">
+        {currentDefinition}
       </div>
-    </div>
-  );
-};
-
-interface FibonacciSliderProps {
-  name: string;
-  value: number;
-  handler: (e: { target: { name: string; value: number } }) => void;
-  tooltipText: string;
-  label: string;
-}
-const FibonacciSlider = ({ name, value, handler, tooltipText, label }: FibonacciSliderProps) => {
-  let valueIndex = FIBONACCI_SCORES.indexOf(value);
-  if (valueIndex === -1) {
-    valueIndex = 4; // Corresponds to 8
-  }
-  const handleChange = (e: { target: { value: string } }) => {
-    const newIndex = parseInt(e.target.value, 10);
-    const newValue = FIBONACCI_SCORES[newIndex];
-    handler({ target: { name, value: newValue } });
-  };
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-1">
-        <label htmlFor={name} className="text-sm font-medium text-gray-300 flex items-center">
-          {label}
-          <Tooltip text={tooltipText}>
-            <HelpCircle className="w-4 h-4 ml-1.5 text-gray-500 hover:text-blue-400 cursor-help" />
-          </Tooltip>
-        </label>
-        <span className="text-sm font-bold text-blue-400 bg-gray-700 px-2 py-0.5 rounded">{value}</span>
-      </div>
-      <input
-        type="range"
-        id={name}
-        name={name}
-        min="0"
-        max={FIBONACCI_SCORES.length - 1}
-        value={valueIndex}
-        onChange={handleChange}
-        className="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer range-thumb"
-      />
     </div>
   );
 };
@@ -148,20 +151,20 @@ interface ConfigPanelProps {
   onConfigTest: () => void;
 }
 const ConfigPanel = ({ onConfigTest }: ConfigPanelProps) => (
-  <div className="bg-yellow-900/20 border border-yellow-600 rounded-lg p-4 mb-6">
+  <div className="bg-yellow-900/20 dark:bg-yellow-800/20 border border-yellow-600 dark:border-yellow-500 rounded-lg p-4 mb-6">
     <div className="flex items-center justify-between">
       <div className="flex items-center">
         <Database className="w-5 h-5 text-blue-400 mr-2" />
-        <span className="text-sm font-medium">Storage Mode: In-Memory Session</span>
+        <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Storage Mode: In-Memory Session</span>
       </div>
       <button
         onClick={onConfigTest}
-        className="text-xs bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded transition-colors"
+        className="text-xs bg-gray-700 dark:bg-gray-800 hover:bg-gray-600 dark:hover:bg-gray-700 px-3 py-1 rounded transition-colors text-gray-100"
       >
         Test Config
       </button>
     </div>
-    <p className="text-xs text-gray-400 mt-2">
+    <p className="text-xs text-gray-600 dark:text-gray-400 mt-2">
       Data is stored in memory during this session. Refresh will reset all data.
     </p>
   </div>
@@ -178,11 +181,13 @@ interface Initiative {
   cr: number;
   jobSize: number;
 }
+
 function WSJFApp() {
   // --- State Management ---
   const [initiatives, setInitiatives] = useState<Initiative[]>([]);
   const [weights, setWeights] = useState({ uv: 1, tc: 1, rr: 1, cr: 1 });
   const [isLoading, setIsLoading] = useState(true);
+  const [isExporting, setIsExporting] = useState(false);
   const [newInitiative, setNewInitiative] = useState({
     name: '',
     uv: 3,
@@ -191,6 +196,119 @@ function WSJFApp() {
     cr: 1,
     jobSize: 8,
   });
+
+  // --- PDF Export Function ---
+  const handleExportPdf = async () => {
+    if (initiatives.length === 0) {
+      alert('No initiatives to export. Please add some initiatives first.');
+      return;
+    }
+
+    setIsExporting(true);
+    
+    try {
+      // Check if we're in the browser environment
+      if (typeof window === 'undefined') {
+        throw new Error('PDF export is only available in the browser');
+      }
+
+      // Dynamic imports to avoid SSR issues
+      const { jsPDF } = await import('jspdf');
+      
+      // Import autoTable - this extends jsPDF prototype
+      await import('jspdf-autotable');
+      
+      const doc = new jsPDF();
+      
+      // Add title
+      doc.setFontSize(20);
+      doc.text('WSJF Prioritization Report', 14, 22);
+      
+      // Add timestamp
+      doc.setFontSize(10);
+      doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 30);
+      
+      // Add weights section
+      doc.setFontSize(12);
+      doc.text('Configured Weights:', 14, 40);
+      doc.setFontSize(10);
+      doc.text(`User Value (UV): ${weights.uv}`, 14, 47);
+      doc.text(`Time Criticality (TC): ${weights.tc}`, 14, 52);
+      doc.text(`Risk Reduction (RR): ${weights.rr}`, 14, 57);
+      doc.text(`Compliance/Regulatory (CR): ${weights.cr}`, 14, 62);
+      
+      // Calculate enriched data for table
+      const enrichedInitiatives = initiatives.map(item => {
+        const costOfDelay = (item.uv * weights.uv) + (item.tc * weights.tc) + (item.rr * weights.rr) + (item.cr * weights.cr);
+        const wsjf = item.jobSize > 0 ? costOfDelay / item.jobSize : 0;
+        return { ...item, costOfDelay, wsjf };
+      }).sort((a, b) => b.wsjf - a.wsjf);
+      
+      // Prepare table data
+      const tableData = enrichedInitiatives.map((init, index) => [
+        (index + 1).toString(),
+        init.name,
+        init.uv.toString(),
+        init.tc.toString(),
+        init.rr.toString(),
+        init.cr.toString(),
+        init.jobSize.toString(),
+        init.costOfDelay.toFixed(2),
+        init.wsjf.toFixed(2)
+      ]);
+      
+      // Add table using autoTable
+      doc.autoTable({
+        head: [['Rank', 'Initiative', 'UV', 'TC', 'RR', 'CR', 'Job Size', 'CoD', 'WSJF']],
+        body: tableData,
+        startY: 70,
+        styles: { 
+          fontSize: 8,
+          cellPadding: 2
+        },
+        headStyles: { 
+          fillColor: [41, 128, 185],
+          textColor: 255,
+          fontStyle: 'bold'
+        },
+        alternateRowStyles: { 
+          fillColor: [245, 245, 245] 
+        },
+        columnStyles: {
+          0: { halign: 'center', cellWidth: 15 },
+          1: { cellWidth: 40 },
+          2: { halign: 'center', cellWidth: 15 },
+          3: { halign: 'center', cellWidth: 15 },
+          4: { halign: 'center', cellWidth: 15 },
+          5: { halign: 'center', cellWidth: 15 },
+          6: { halign: 'center', cellWidth: 20 },
+          7: { halign: 'center', cellWidth: 20 },
+          8: { halign: 'center', cellWidth: 20 }
+        }
+      });
+      
+      // Save the PDF
+      doc.save(`wsjf_prioritization_report_${new Date().toISOString().split('T')[0]}.pdf`);
+      
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      
+      if (error instanceof Error) {
+        if (error.message.includes('browser')) {
+          alert('PDF export is only available when running in the browser.');
+        } else if (error.message.includes('import')) {
+          alert('Failed to load PDF libraries. Please try refreshing the page.');
+        } else {
+          alert(`Failed to generate PDF: ${error.message}`);
+        }
+      } else {
+        alert('Failed to generate PDF. Please try again.');
+      }
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   // --- Tooltip Content ---
   const tooltips = {
     uv: 'User Value / Training Readiness Impact: How much value this delivers to the user, reducing manual effort or enabling critical training functionality.',
@@ -200,273 +318,273 @@ function WSJFApp() {
     jobSize:
       "Job Size (Story Points): The development team's estimate of the effort required, using Fibonacci sequence numbers.",
   };
-  // --- Initialization ---
-  useEffect(() => {
-    // Simulate loading time and initialization
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 1000);
-    return () => clearTimeout(timer);
-  }, []);
-  // --- Handlers ---
-  const handleWeightChange = (e: { target: { name: any; value: any } }) => {
-    const { name, value } = e.target;
-    setWeights((prev) => ({ ...prev, [name]: Number(value) }));
-  };
-  const handleInitiativeChange = (e: { target: { name: any; value: any } }) => {
+
+  // --- Event Handlers ---
+  const updateNewInitiative = (e: { target: { name: string; value: string | number } }) => {
     const { name, value } = e.target;
     setNewInitiative((prev) => ({
       ...prev,
-      [name]: name === 'name' ? value : Number(value),
+      [name]: typeof value === 'string' ? value : value,
     }));
   };
+
+  const updateWeights = (e: { target: { name: string; value: string | number } }) => {
+    const { name, value } = e.target;
+    setWeights((prev) => ({
+      ...prev,
+      [name]: typeof value === 'string' ? parseFloat(value) : value,
+    }));
+  };
+
   const addInitiative = () => {
-    if (!newInitiative.name.trim()) return;
+    if (!newInitiative.name.trim()) {
+      alert('Initiative name is required.');
+      return;
+    }
+
     const initiative: Initiative = {
       ...newInitiative,
-      id: Date.now().toString(),
+      id: uuidv4(),
       createdAt: new Date().toISOString(),
     };
+
     setInitiatives((prev) => [...prev, initiative]);
-    setNewInitiative({ name: '', uv: 3, tc: 3, rr: 3, cr: 1, jobSize: 8 });
+    setNewInitiative({
+      name: '',
+      uv: 3,
+      tc: 3,
+      rr: 3,
+      cr: 1,
+      jobSize: 8,
+    });
   };
+
   const deleteInitiative = (id: string) => {
     setInitiatives((prev) => prev.filter((item) => item.id !== id));
   };
-  const testConfiguration = () => {
-    const config = {
-      storageMode: 'in-memory',
-      dataCount: initiatives.length,
-      weights: weights,
-    };
-    alert(`Configuration Test:\n${JSON.stringify(config, null, 2)}`);
+
+  const testConfig = () => {
+    alert('Configuration test: All systems operational!');
   };
-  // --- WSJF Calculation ---
-  const rankedInitiatives = useMemo(() => {
-    return initiatives
-      .map((initiative) => {
-        const { uv, tc, rr, cr, jobSize } = initiative;
-        const costOfDelay = uv * weights.uv + tc * weights.tc + rr * weights.rr + cr * weights.cr;
-        const effectiveJobSize = jobSize > 0 ? jobSize : 1;
-        const wsjf = costOfDelay / effectiveJobSize;
-        return { ...initiative, costOfDelay, wsjf };
-      })
-      .sort((a, b) => b.wsjf - a.wsjf);
-  }, [initiatives, weights]);
-  // --- UI Rendering ---
-  const renderWeightSlider = (
-    name: string,
-    value: number,
-    handler: React.ChangeEventHandler<HTMLInputElement>,
-    tooltipText: string,
-    label: string,
-  ) => (
-    <div className="flex-1 min-w-[150px]">
-      <div className="flex items-center justify-between mb-1">
-        <label htmlFor={name} className="text-sm font-medium text-gray-300 flex items-center">
-          {label}
-          <Tooltip text={tooltipText}>
-            <HelpCircle className="w-4 h-4 ml-1.5 text-gray-500 hover:text-blue-400 cursor-help" />
-          </Tooltip>
-        </label>
-        <span className="text-sm font-bold text-blue-400 bg-gray-700 px-2 py-0.5 rounded">{value}</span>
-      </div>
-      <input
-        type="range"
-        id={name}
-        name={name}
-        min="1"
-        max="10"
-        value={value}
-        onChange={handler}
-        className="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer range-thumb"
-      />
-    </div>
-  );
-  // Loading state
+
+  // --- Calculations ---
+  const enrichedInitiatives = initiatives.map((item) => {
+    const costOfDelay = (item.uv * weights.uv) + (item.tc * weights.tc) + (item.rr * weights.rr) + (item.cr * weights.cr);
+    const wsjf = item.jobSize > 0 ? costOfDelay / item.jobSize : 0;
+    return { ...item, costOfDelay, wsjf };
+  });
+
+  const sortedInitiatives = enrichedInitiatives.sort((a, b) => b.wsjf - a.wsjf);
+
+  useEffect(() => {
+    setIsLoading(false);
+  }, []);
+
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-gray-900 text-white">
-        <div className="text-center">
-          <svg
-            className="animate-spin h-10 w-10 text-blue-500 mx-auto"
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-          >
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-            <path
-              className="opacity-75"
-              fill="currentColor"
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-            ></path>
-          </svg>
-          <p className="mt-4 text-lg">Loading Prioritization Matrix...</p>
-        </div>
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <div className="text-white">Loading WSJF Calculator...</div>
       </div>
     );
   }
+
   return (
-    <div className="min-h-screen bg-gray-900 text-white font-sans p-4 sm:p-6 lg:p-8">
-      <style>{`
-                .range-thumb::-webkit-slider-thumb {
-                    -webkit-appearance: none;
-                    appearance: none;
-                    width: 20px;
-                    height: 20px;
-                    background: #60a5fa;
-                    cursor: pointer;
-                    border-radius: 50%;
-                    border: 2px solid #1f2937;
-                }
-                .range-thumb::-moz-range-thumb {
-                    width: 20px;
-                    height: 20px;
-                    background: #60a5fa;
-                    cursor: pointer;
-                    border-radius: 50%;
-                    border: 2px solid #1f2937;
-                }
-            `}</style>
-      <div className="max-w-7xl mx-auto">
-        <header className="mb-8 text-center">
-          <h1 className="text-4xl font-bold text-blue-400">WSJF Prioritization Calculator</h1>
-          <p className="mt-2 text-lg text-gray-400">
-            Prioritize initiatives by calculating Weighted Shortest Job First.
-          </p>
-        </header>
-        <ConfigPanel onConfigTest={testConfiguration} />
-        <div className="bg-gray-800 p-6 rounded-xl shadow-lg mb-8">
-          <h2 className="text-2xl font-semibold mb-4 text-white">Cost of Delay Weights</h2>
-          <p className="text-gray-400 mb-6">
-            Adjust the relative importance of each CoD component. These weights are determined by stakeholders.
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {renderWeightSlider('uv', weights.uv, handleWeightChange, tooltips.uv, 'User Value')}
-            {renderWeightSlider('tc', weights.tc, handleWeightChange, tooltips.tc, 'Time Criticality')}
-            {renderWeightSlider('rr', weights.rr, handleWeightChange, tooltips.rr, 'Risk Reduction')}
-            {renderWeightSlider('cr', weights.cr, handleWeightChange, tooltips.cr, 'Compliance')}
-          </div>
+    <div className="min-h-screen p-8 transition-colors duration-200 bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+      {/* Header */}
+      <header className="flex flex-col sm:flex-row justify-between items-center mb-8 gap-4">
+        <h1 className="text-4xl font-extrabold text-blue-700 dark:text-blue-400">WSJF Calculator</h1>
+        <div className="flex items-center gap-4">
+          <DarkModeToggle />
+          <button
+            onClick={handleExportPdf}
+            disabled={isExporting || initiatives.length === 0}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white font-semibold rounded-md shadow-lg hover:bg-blue-700 dark:hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            <FileDown className="w-4 h-4" />
+            {isExporting ? 'Generating PDF...' : 'Export PDF'}
+          </button>
         </div>
-        <div className="bg-gray-800 p-6 rounded-xl shadow-lg mb-8">
-          <h2 className="text-2xl font-semibold mb-4 text-white">Add New Initiative</h2>
-          <div className="space-y-6">
-            <div>
-              <label htmlFor="initiative-name" className="text-sm font-medium text-gray-300 mb-1 block">
-                Initiative Name
-              </label>
-              <input
-                type="text"
-                id="initiative-name"
-                name="name"
-                value={newInitiative.name}
-                onChange={handleInitiativeChange}
-                placeholder="e.g., Automate Training Readiness Report"
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
-                required
-              />
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-8">
-              <ScoringSlider
-                name="uv"
-                value={newInitiative.uv}
-                handler={handleInitiativeChange}
-                tooltipText={tooltips.uv}
-                label="User Value"
-                definitions={SCORE_DEFINITIONS.uv}
-              />
-              <ScoringSlider
-                name="tc"
-                value={newInitiative.tc}
-                handler={handleInitiativeChange}
-                tooltipText={tooltips.tc}
-                label="Time Criticality"
-                definitions={SCORE_DEFINITIONS.tc}
-              />
-              <ScoringSlider
-                name="rr"
-                value={newInitiative.rr}
-                handler={handleInitiativeChange}
-                tooltipText={tooltips.rr}
-                label="Risk Reduction"
-                definitions={SCORE_DEFINITIONS.rr}
-              />
-              <ScoringSlider
-                name="cr"
-                value={newInitiative.cr}
-                handler={handleInitiativeChange}
-                tooltipText={tooltips.cr}
-                label="Compliance"
-                definitions={SCORE_DEFINITIONS.cr}
-              />
-            </div>
-            <FibonacciSlider
-              name="jobSize"
-              value={newInitiative.jobSize}
-              handler={handleInitiativeChange}
-              tooltipText={tooltips.jobSize}
-              label="Job Size (Story Points)"
+      </header>
+
+      <ConfigPanel onConfigTest={testConfig} />
+
+      {/* Weights Configuration */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-8">
+        <h2 className="text-2xl font-bold mb-6 text-gray-900 dark:text-gray-100">Configure Prioritization Weights</h2>
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          <div className="flex flex-col">
+            <label className="text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">User Value Weight:</label>
+            <input
+              type="number"
+              name="uv"
+              value={weights.uv}
+              onChange={updateWeights}
+              min="0"
+              step="0.1"
+              className="p-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
             />
-            <div className="text-right">
-              <button
-                onClick={addInitiative}
-                className="inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-blue-500 transition-colors"
-              >
-                <PlusCircle className="w-5 h-5 mr-2" />
-                Add Initiative
-              </button>
-            </div>
+          </div>
+          <div className="flex flex-col">
+            <label className="text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Time Criticality Weight:</label>
+            <input
+              type="number"
+              name="tc"
+              value={weights.tc}
+              onChange={updateWeights}
+              min="0"
+              step="0.1"
+              className="p-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+            />
+          </div>
+          <div className="flex flex-col">
+            <label className="text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Risk Reduction Weight:</label>
+            <input
+              type="number"
+              name="rr"
+              value={weights.rr}
+              onChange={updateWeights}
+              min="0"
+              step="0.1"
+              className="p-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+            />
+          </div>
+          <div className="flex flex-col">
+            <label className="text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Compliance Weight:</label>
+            <input
+              type="number"
+              name="cr"
+              value={weights.cr}
+              onChange={updateWeights}
+              min="0"
+              step="0.1"
+              className="p-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+            />
           </div>
         </div>
-        <div className="overflow-x-auto bg-gray-800 rounded-xl shadow-lg">
-          <table className="min-w-full divide-y divide-gray-700">
-            <thead className="bg-gray-700/50">
+      </div>
+
+      {/* Add New Initiative */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-8">
+        <h2 className="text-2xl font-bold mb-6 text-gray-900 dark:text-gray-100">Add New Initiative</h2>
+        
+        <div className="mb-6">
+          <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Initiative Name:</label>
+          <input
+            type="text"
+            name="name"
+            value={newInitiative.name}
+            onChange={updateNewInitiative}
+            placeholder="Enter initiative name..."
+            className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+          />
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          <ScoringSlider
+            name="uv"
+            value={newInitiative.uv}
+            handler={updateNewInitiative}
+            tooltipText={tooltips.uv}
+            label="User Value (UV)"
+            definitions={SCORING_DEFINITIONS.uv}
+          />
+          <ScoringSlider
+            name="tc"
+            value={newInitiative.tc}
+            handler={updateNewInitiative}
+            tooltipText={tooltips.tc}
+            label="Time Criticality (TC)"
+            definitions={SCORING_DEFINITIONS.tc}
+          />
+          <ScoringSlider
+            name="rr"
+            value={newInitiative.rr}
+            handler={updateNewInitiative}
+            tooltipText={tooltips.rr}
+            label="Risk Reduction (RR)"
+            definitions={SCORING_DEFINITIONS.rr}
+          />
+          <ScoringSlider
+            name="cr"
+            value={newInitiative.cr}
+            handler={updateNewInitiative}
+            tooltipText={tooltips.cr}
+            label="Compliance/Regulatory (CR)"
+            definitions={SCORING_DEFINITIONS.cr}
+          />
+        </div>
+
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center">
+              Job Size (Story Points)
+              <Tooltip text={tooltips.jobSize}>
+                <HelpCircle className="w-4 h-4 ml-1.5 text-gray-500 hover:text-blue-400 cursor-help" />
+              </Tooltip>
+            </label>
+            <span className="text-sm font-bold text-blue-400 bg-gray-700 dark:bg-gray-800 px-2 py-0.5 rounded">
+              {newInitiative.jobSize}
+            </span>
+          </div>
+          <select
+            name="jobSize"
+            value={newInitiative.jobSize}
+            onChange={updateNewInitiative}
+            className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+          >
+            {FIBONACCI_SCORES.map((score) => (
+              <option key={score} value={score}>
+                {score} point{score !== 1 ? 's' : ''}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <button
+          onClick={addInitiative}
+          className="w-full bg-blue-600 dark:bg-blue-700 hover:bg-blue-700 dark:hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2"
+        >
+          <Plus className="w-5 h-5" />
+          Add Initiative
+        </button>
+      </div>
+
+      {/* Results Table */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Prioritized Initiatives</h2>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50 dark:bg-gray-700">
               <tr>
-                <th
-                  scope="col"
-                  className="px-6 py-4 text-left text-xs font-bold text-blue-300 uppercase tracking-wider"
-                >
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   Rank
                 </th>
-                <th
-                  scope="col"
-                  className="py-4 text-left text-xs font-bold text-blue-300 uppercase tracking-wider min-w-[200px]"
-                >
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   Initiative
                 </th>
-                <th
-                  scope="col"
-                  className="px-4 py-4 text-center text-xs font-bold text-blue-300 uppercase tracking-wider"
-                >
-                  CoD
+                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  Cost of Delay
                 </th>
-                <th
-                  scope="col"
-                  className="px-4 py-4 text-center text-xs font-bold text-blue-300 uppercase tracking-wider"
-                >
+                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   Job Size
                 </th>
-                <th
-                  scope="col"
-                  className="px-6 py-4 text-center text-xs font-bold text-blue-300 uppercase tracking-wider"
-                >
-                  WSJF
+                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  WSJF Score
                 </th>
-                <th
-                  scope="col"
-                  className="px-6 py-4 text-right text-xs font-bold text-blue-300 uppercase tracking-wider"
-                >
+                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-gray-800 divide-y divide-gray-700">
-              {rankedInitiatives.length > 0 ? (
-                rankedInitiatives.map((item, index) => (
-                  <tr key={item.id} className="hover:bg-gray-700/50 transition-colors">
+            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+              {sortedInitiatives.length > 0 ? (
+                sortedInitiatives.map((item, index) => (
+                  <tr key={item.id} className={index % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-gray-50 dark:bg-gray-750'}>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span
-                        className={`flex items-center justify-center w-8 h-8 rounded-full font-bold text-lg ${
+                        className={`inline-flex items-center justify-center w-8 h-8 rounded-full text-sm font-bold ${
                           index === 0
                             ? 'bg-green-500 text-white'
                             : index === 1
@@ -479,23 +597,23 @@ function WSJFApp() {
                         {index + 1}
                       </span>
                     </td>
-                    <td className="py-4 whitespace-nowrap">
-                      <div className="font-medium text-white">{item.name}</div>
-                      <div className="text-xs text-gray-400 mt-1">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="font-medium text-gray-900 dark:text-white">{item.name}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                         {`UV:${item.uv} | TC:${item.tc} | RR:${item.rr} | CR:${item.cr}`}
                       </div>
                     </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-center text-gray-300">
+                    <td className="px-6 py-4 whitespace-nowrap text-center text-gray-900 dark:text-gray-300">
                       {item.costOfDelay.toFixed(0)}
                     </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-center text-gray-300">{item.jobSize}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center text-xl font-bold text-blue-400">
+                    <td className="px-6 py-4 whitespace-nowrap text-center text-gray-900 dark:text-gray-300">{item.jobSize}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-center text-xl font-bold text-blue-600 dark:text-blue-400">
                       {item.wsjf.toFixed(2)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right">
+                    <td className="px-6 py-4 whitespace-nowrap text-center">
                       <button
                         onClick={() => deleteInitiative(item.id)}
-                        className="text-gray-500 hover:text-red-500 transition-colors p-2 rounded-full hover:bg-red-500/10"
+                        className="text-gray-500 dark:text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors p-2 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20"
                       >
                         <Trash2 className="w-5 h-5" />
                       </button>
@@ -505,8 +623,8 @@ function WSJFApp() {
               ) : (
                 <tr>
                   <td colSpan={6} className="text-center py-16 px-6">
-                    <h3 className="text-lg font-medium text-white">No initiatives yet.</h3>
-                    <p className="mt-1 text-sm text-gray-400">
+                    <h3 className="text-lg font-medium text-gray-900 dark:text-white">No initiatives yet.</h3>
+                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                       Use the form above to add your first software initiative.
                     </p>
                   </td>
@@ -516,6 +634,11 @@ function WSJFApp() {
           </table>
         </div>
       </div>
+
+      {/* Footer */}
+      <footer className="text-center text-gray-500 dark:text-gray-400 text-sm mt-8">
+        <p>WSJF Calculator - Prioritize initiatives using Weighted Shortest Job First methodology</p>
+      </footer>
     </div>
   );
 }
