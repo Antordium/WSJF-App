@@ -4,35 +4,48 @@ const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
   experimental: {
-    esmExternals: 'loose', // Helps with PDF library imports
+    esmExternals: true,
   },
-  webpack: (config, { isServer }) => {
-    // Configure fallbacks for client-side PDF libraries
+  webpack: (config, { isServer, webpack }) => {
+    // Client-side configurations
     if (!isServer) {
       config.resolve.fallback = {
         ...config.resolve.fallback,
         fs: false,
         path: false,
+        os: false,
         crypto: false,
       };
     }
     
-    // Ignore server-only modules in client bundle
-    config.externals = config.externals || [];
-    config.externals.push({
-      'utf-8-validate': 'commonjs utf-8-validate',
-      'bufferutil': 'commonjs bufferutil',
+    // Handle PDF libraries
+    config.module.rules.push({
+      test: /\.m?js$/,
+      type: 'javascript/auto',
+      resolve: {
+        fullySpecified: false,
+      },
     });
+
+    // Ignore canvas package for jsPDF (not needed for basic functionality)
+    config.plugins.push(
+      new webpack.IgnorePlugin({
+        resourceRegExp: /^canvas$/,
+      })
+    );
     
     return config;
   },
-  // Ensure Vercel deployment works correctly
-  images: {
-    unoptimized: false,
+  // Optimize for Vercel deployment
+  output: 'standalone',
+  poweredByHeader: false,
+  compress: true,
+  // Handle static optimization
+  trailingSlash: false,
+  // Environment variables
+  env: {
+    NEXT_PUBLIC_APP_NAME: 'WSJF Calculator',
   },
-  // Enable static export if needed (uncomment for static sites)
-  // output: 'export',
-  // trailingSlash: true,
 };
 
 export default nextConfig;
