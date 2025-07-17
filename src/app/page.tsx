@@ -38,45 +38,57 @@ const definitions = {
   },
 };
 
+// --- Dark Mode Theme ---
+const getTheme = (isDark: boolean) => ({
+  background: isDark ? '#111827' : '#f3f4f6',
+  cardBackground: isDark ? '#1f2937' : '#ffffff',
+  textPrimary: isDark ? '#f9fafb' : '#111827',
+  textSecondary: isDark ? '#d1d5db' : '#4b5563',
+  textMuted: isDark ? '#9ca3af' : '#6b7280',
+  border: isDark ? '#374151' : '#e5e7eb',
+  borderAccent: isDark ? '#4b5563' : '#d1d5db',
+  toggleBg: isDark ? '#374151' : '#e5e7eb',
+  toggleText: isDark ? '#e5e7eb' : '#1f2937',
+  sliderBg: isDark ? '#4b5563' : '#d1d5db',
+  sliderThumb: '#3b82f6',
+  buttonPrimary: '#3b82f6',
+  buttonSuccess: '#10b981',
+  hoverOverlay: isDark ? 'rgba(55, 65, 81, 0.5)' : 'rgba(229, 231, 235, 0.5)',
+});
+
 // --- Dark Mode Toggle Component ---
-const DarkModeToggle = () => {
-  const [isDarkMode, setIsDarkMode] = useState(false);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-      const savedMode = localStorage.getItem('darkMode');
-      const shouldUseDark = savedMode ? savedMode === 'true' : prefersDark;
-      
-      setIsDarkMode(shouldUseDark);
-      document.documentElement.classList.toggle('dark', shouldUseDark);
-    }
-  }, []);
-
-  const toggleDarkMode = () => {
-    const newMode = !isDarkMode;
-    setIsDarkMode(newMode);
-    if (typeof window !== 'undefined') {
-      document.documentElement.classList.toggle('dark', newMode);
-      localStorage.setItem('darkMode', newMode.toString());
-    }
-  };
-
+const DarkModeToggle = ({ isDark, onToggle }: { isDark: boolean; onToggle: () => void }) => {
+  const theme = getTheme(isDark);
+  
   return (
     <button
-      onClick={toggleDarkMode}
-      className="p-2 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors flex items-center space-x-2"
+      onClick={onToggle}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        padding: '8px 12px',
+        borderRadius: '24px',
+        backgroundColor: theme.toggleBg,
+        color: theme.toggleText,
+        border: 'none',
+        cursor: 'pointer',
+        fontSize: '14px',
+        fontWeight: '500',
+        transition: 'all 150ms ease',
+        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+      }}
       aria-label="Toggle dark mode"
     >
-      {isDarkMode ? (
+      {isDark ? (
         <>
-          <Sun className="w-5 h-5" />
-          <span className="text-sm">Light Mode</span>
+          <Sun style={{ width: '20px', height: '20px' }} />
+          <span>Light Mode</span>
         </>
       ) : (
         <>
-          <Moon className="w-5 h-5" />
-          <span className="text-sm">Dark Mode</span>
+          <Moon style={{ width: '20px', height: '20px' }} />
+          <span>Dark Mode</span>
         </>
       )}
     </button>
@@ -84,18 +96,54 @@ const DarkModeToggle = () => {
 };
 
 // --- Helper Components ---
-type TooltipProps = { text: string; children: React.ReactNode };
-const Tooltip = ({ text, children }: TooltipProps) => (
-  <div className="relative flex items-center group">
-    {children}
-    <div className="absolute bottom-full mb-2 w-72 p-3 text-sm text-white dark:text-gray-100 bg-gray-800 dark:bg-gray-700 border border-gray-600 dark:border-gray-500 rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10 pointer-events-none">
-      {text}
-      <svg className="absolute text-gray-800 dark:text-gray-700 h-2 w-full left-0 top-full" x="0px" y="0px" viewBox="0 0 255 255">
-        <polygon className="fill-current" points="0,0 127.5,127.5 255,0" />
-      </svg>
+type TooltipProps = { text: string; children: React.ReactNode; theme: any };
+const Tooltip = ({ text, children, theme }: TooltipProps) => {
+  const [isVisible, setIsVisible] = useState(false);
+  
+  return (
+    <div 
+      style={{ position: 'relative', display: 'flex', alignItems: 'center' }}
+      onMouseEnter={() => setIsVisible(true)}
+      onMouseLeave={() => setIsVisible(false)}
+    >
+      {children}
+      {isVisible && (
+        <div 
+          style={{
+            position: 'absolute',
+            bottom: '100%',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            marginBottom: '8px',
+            width: '288px',
+            padding: '12px',
+            fontSize: '14px',
+            color: '#ffffff',
+            backgroundColor: '#1f2937',
+            border: '1px solid #4b5563',
+            borderRadius: '8px',
+            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+            zIndex: 1000,
+            lineHeight: '1.4'
+          }}
+        >
+          {text}
+          <div style={{
+            position: 'absolute',
+            top: '100%',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            width: '0',
+            height: '0',
+            borderLeft: '6px solid transparent',
+            borderRight: '6px solid transparent',
+            borderTop: '6px solid #1f2937'
+          }} />
+        </div>
+      )}
     </div>
-  </div>
-);
+  );
+};
 
 interface ScoringSliderProps {
   name: string;
@@ -104,7 +152,9 @@ interface ScoringSliderProps {
   tooltipText: string;
   label: string;
   definitions: Record<number, string>;
+  theme: any;
 }
+
 const ScoringSlider = ({
   name,
   value,
@@ -112,6 +162,7 @@ const ScoringSlider = ({
   tooltipText,
   label,
   definitions,
+  theme
 }: ScoringSliderProps): React.JSX.Element => {
   const valueIndex = ALLOWED_SCORES.indexOf(value);
   const handleChange = (e: { target: { value: string } }) => {
@@ -120,16 +171,26 @@ const ScoringSlider = ({
     handler({ target: { name: name, value: newValue } });
   };
   const currentDefinition = definitions[value];
+  
   return (
-    <div className="flex-1 min-w-[200px] flex flex-col">
-      <div className="flex items-center justify-between mb-1">
-        <label htmlFor={name} className="text-sm font-medium text-gray-300 dark:text-gray-400 flex items-center">
+    <div style={{ flex: 1, minWidth: '200px', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+        <label htmlFor={name} style={{ display: 'flex', alignItems: 'center', fontSize: '14px', fontWeight: '500', color: theme.textSecondary }}>
           {label}
-          <Tooltip text={tooltipText}>
-            <HelpCircle className="w-4 h-4 ml-1.5 text-gray-500 hover:text-blue-400 cursor-help" />
+          <Tooltip text={tooltipText} theme={theme}>
+            <HelpCircle style={{ width: '16px', height: '16px', marginLeft: '6px', color: theme.textMuted, cursor: 'help' }} />
           </Tooltip>
         </label>
-        <span className="text-sm font-bold text-blue-400 dark:text-blue-300 bg-gray-700 dark:bg-gray-600 px-2 py-0.5 rounded">{value}</span>
+        <span style={{ 
+          fontSize: '14px', 
+          fontWeight: 'bold', 
+          color: '#60a5fa', 
+          backgroundColor: theme.sliderBg, 
+          padding: '4px 8px', 
+          borderRadius: '4px' 
+        }}>
+          {value}
+        </span>
       </div>
       <input
         type="range"
@@ -139,9 +200,17 @@ const ScoringSlider = ({
         max={FIBONACCI_SCORES.length - 1}
         value={valueIndex}
         onChange={handleChange}
-        className="w-full h-2 bg-gray-600 dark:bg-gray-500 rounded-lg appearance-none cursor-pointer range-thumb"
+        style={{
+          width: '100%',
+          height: '8px',
+          backgroundColor: theme.sliderBg,
+          borderRadius: '8px',
+          appearance: 'none',
+          cursor: 'pointer',
+          outline: 'none'
+        }}
       />
-      <div className="text-xs text-gray-400 dark:text-gray-500 mt-2 leading-tight">
+      <div style={{ fontSize: '12px', color: theme.textMuted, marginTop: '8px', lineHeight: '1.4' }}>
         {currentDefinition}
       </div>
     </div>
@@ -150,22 +219,38 @@ const ScoringSlider = ({
 
 interface ConfigPanelProps {
   onConfigTest: () => void;
+  theme: any;
 }
-const ConfigPanel = ({ onConfigTest }: ConfigPanelProps) => (
-  <div className="bg-yellow-900/20 dark:bg-yellow-800/20 border border-yellow-600 dark:border-yellow-500 rounded-lg p-4 mb-6">
-    <div className="flex items-center justify-between">
-      <div className="flex items-center">
-        <Database className="w-5 h-5 text-blue-400 dark:text-blue-300 mr-2" />
-        <span className="text-sm font-medium text-gray-100 dark:text-gray-200">Storage Mode: In-Memory Session</span>
+const ConfigPanel = ({ onConfigTest, theme }: ConfigPanelProps) => (
+  <div style={{
+    backgroundColor: 'rgba(251, 191, 36, 0.1)',
+    border: `1px solid #fbbf24`,
+    borderRadius: '8px',
+    padding: '16px',
+    marginBottom: '24px'
+  }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div style={{ display: 'flex', alignItems: 'center' }}>
+        <Database style={{ width: '20px', height: '20px', color: '#60a5fa', marginRight: '8px' }} />
+        <span style={{ fontSize: '14px', fontWeight: '500', color: theme.textPrimary }}>Storage Mode: In-Memory Session</span>
       </div>
       <button
         onClick={onConfigTest}
-        className="text-xs bg-gray-700 dark:bg-gray-600 hover:bg-gray-600 dark:hover:bg-gray-500 px-3 py-1 rounded transition-colors text-gray-100 dark:text-gray-200"
+        style={{
+          fontSize: '12px',
+          backgroundColor: theme.sliderBg,
+          color: theme.textPrimary,
+          padding: '6px 12px',
+          borderRadius: '4px',
+          border: 'none',
+          cursor: 'pointer',
+          transition: 'background-color 150ms ease'
+        }}
       >
         Test Config
       </button>
     </div>
-    <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
+    <p style={{ fontSize: '12px', color: theme.textMuted, marginTop: '8px' }}>
       Data is stored in memory during this session. Refresh will reset all data.
     </p>
   </div>
@@ -189,6 +274,7 @@ function WSJFApp() {
   const [weights, setWeights] = useState({ uv: 1, tc: 1, rr: 1, cr: 1 });
   const [isLoading, setIsLoading] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(false);
   const [newInitiative, setNewInitiative] = useState({
     name: '',
     uv: 3,
@@ -198,6 +284,8 @@ function WSJFApp() {
     jobSize: 8,
   });
 
+  const theme = getTheme(isDarkMode);
+
   // --- Tooltip Content ---
   const tooltips = {
     uv: 'User Value / Training Readiness Impact: How much value this delivers to the user, reducing manual effort or enabling critical training functionality.',
@@ -206,6 +294,15 @@ function WSJFApp() {
     cr: 'Compliance / Regulatory / SLA: Is this required by law, regulation, or a Service Level Agreement?',
     jobSize:
       "Job Size (Story Points): The development team's estimate of the effort required, using Fibonacci sequence numbers.",
+  };
+
+  // --- Dark Mode Handler ---
+  const toggleDarkMode = () => {
+    const newMode = !isDarkMode;
+    setIsDarkMode(newMode);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('darkMode', newMode.toString());
+    }
   };
 
   // --- PDF Export Function ---
@@ -319,19 +416,7 @@ function WSJFApp() {
       
     } catch (error) {
       console.error('Error generating PDF:', error);
-      
-      // Provide more specific error messaging
-      if (error instanceof Error) {
-        if (error.message.includes('browser')) {
-          alert('PDF export is only available when running in the browser.');
-        } else if (error.message.includes('import') || error.message.includes('module')) {
-          alert('Failed to load PDF libraries. Please try refreshing the page.');
-        } else {
-          alert(`Failed to generate PDF: ${error.message}`);
-        }
-      } else {
-        alert('Failed to generate PDF. Please try again or check the browser console for details.');
-      }
+      alert('Failed to generate PDF. Please try again.');
     } finally {
       setIsExporting(false);
     }
@@ -339,7 +424,15 @@ function WSJFApp() {
 
   // --- Initialization ---
   useEffect(() => {
-    // Simulate loading time and initialization
+    // Initialize dark mode from localStorage
+    if (typeof window !== 'undefined') {
+      const savedMode = localStorage.getItem('darkMode');
+      const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const shouldUseDark = savedMode ? savedMode === 'true' : prefersDark;
+      setIsDarkMode(shouldUseDark);
+    }
+    
+    // Simulate loading time
     const timer = setTimeout(() => {
       setIsLoading(false);
     }, 1000);
@@ -405,15 +498,17 @@ function WSJFApp() {
     tooltipText: string,
     label: string,
   ) => (
-    <div className="flex-1 min-w-[150px]">
-      <div className="flex items-center justify-between mb-1">
-        <label htmlFor={name} className="text-sm font-medium text-gray-300 dark:text-gray-400 flex items-center">
+    <div style={{ flex: 1, minWidth: '150px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+        <label htmlFor={name} style={{ display: 'flex', alignItems: 'center', fontSize: '14px', fontWeight: '500', color: theme.textSecondary }}>
           {label}
-          <Tooltip text={tooltipText}>
-            <HelpCircle className="w-4 h-4 ml-1.5 text-gray-500 hover:text-blue-400 cursor-help" />
+          <Tooltip text={tooltipText} theme={theme}>
+            <HelpCircle style={{ width: '16px', height: '16px', marginLeft: '6px', color: theme.textMuted, cursor: 'help' }} />
           </Tooltip>
         </label>
-        <span className="text-sm font-bold text-blue-400 dark:text-blue-300 bg-gray-700 dark:bg-gray-600 px-2 py-0.5 rounded">{value}</span>
+        <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#60a5fa', backgroundColor: theme.sliderBg, padding: '4px 8px', borderRadius: '4px' }}>
+          {value}
+        </span>
       </div>
       <input
         type="range"
@@ -423,7 +518,15 @@ function WSJFApp() {
         max="10"
         value={value}
         onChange={handler}
-        className="w-full h-2 bg-gray-600 dark:bg-gray-500 rounded-lg appearance-none cursor-pointer range-thumb"
+        style={{
+          width: '100%',
+          height: '8px',
+          backgroundColor: theme.sliderBg,
+          borderRadius: '8px',
+          appearance: 'none',
+          cursor: 'pointer',
+          outline: 'none'
+        }}
       />
     </div>
   );
@@ -431,45 +534,89 @@ function WSJFApp() {
   // Loading state
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 transition-colors duration-200">
-        <div className="text-center">
-          <svg
-            className="animate-spin h-10 w-10 text-blue-500 mx-auto"
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-          >
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-            <path
-              className="opacity-75"
-              fill="currentColor"
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-            ></path>
-          </svg>
-          <p className="mt-4 text-lg">Loading Prioritization Matrix...</p>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: '100vh',
+        backgroundColor: theme.background,
+        color: theme.textPrimary,
+        fontFamily: 'ui-sans-serif, system-ui, sans-serif'
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{
+            width: '40px',
+            height: '40px',
+            border: '4px solid #60a5fa',
+            borderTop: '4px solid transparent',
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite',
+            margin: '0 auto 16px'
+          }} />
+          <p style={{ fontSize: '18px' }}>Loading Prioritization Matrix...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 font-sans transition-colors duration-200">
-      <div className="!container mx-auto p-6">
+    <div style={{
+      minHeight: '100vh',
+      backgroundColor: theme.background,
+      color: theme.textPrimary,
+      fontFamily: 'ui-sans-serif, system-ui, sans-serif',
+      transition: 'all 200ms ease'
+    }}>
+      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px' }}>
         {/* Header with Dark Mode Toggle */}
-        <div className="flex flex-col sm:flex-row justify-between items-center mb-8 gap-4">
-          <h1 className="text-4xl font-bold text-blue-400 dark:text-blue-600">WSJF Calculator</h1>
-          <DarkModeToggle />
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: '32px',
+          gap: '16px'
+        }}>
+          <h1 style={{
+            fontSize: '36px',
+            fontWeight: 'bold',
+            color: '#60a5fa',
+            margin: 0,
+            textAlign: 'center'
+          }}>
+            WSJF Calculator
+          </h1>
+          <DarkModeToggle isDark={isDarkMode} onToggle={toggleDarkMode} />
         </div>
 
         {/* Configuration Panel */}
-        <ConfigPanel onConfigTest={testConfiguration} />
+        <ConfigPanel onConfigTest={testConfiguration} theme={theme} />
 
         {/* Weights Configuration */}
-        <div className="bg-gray-800 dark:bg-white rounded-lg p-6 mb-6 shadow-lg border border-gray-700 dark:border-gray-200">
-          <h2 className="text-2xl font-semibold mb-4 text-white dark:text-gray-900 border-b border-gray-700 dark:border-gray-300 pb-2">
+        <div style={{
+          backgroundColor: theme.cardBackground,
+          borderRadius: '8px',
+          padding: '24px',
+          marginBottom: '24px',
+          boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+          border: `1px solid ${theme.border}`
+        }}>
+          <h2 style={{
+            fontSize: '24px',
+            fontWeight: '600',
+            marginBottom: '16px',
+            color: theme.textPrimary,
+            borderBottom: `1px solid ${theme.border}`,
+            paddingBottom: '8px',
+            margin: '0 0 16px 0'
+          }}>
             Define Cost of Delay Weights
           </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gap: '16px'
+          }}>
             {renderWeightSlider('uv', weights.uv, handleWeightChange, tooltips.uv, 'User Value (UV)')}
             {renderWeightSlider('tc', weights.tc, handleWeightChange, tooltips.tc, 'Time Criticality (TC)')}
             {renderWeightSlider('rr', weights.rr, handleWeightChange, tooltips.rr, 'Risk Reduction (RR)')}
@@ -478,12 +625,33 @@ function WSJFApp() {
         </div>
 
         {/* Initiative Input Form */}
-        <div className="bg-gray-800 dark:bg-white rounded-lg p-6 mb-6 shadow-lg border border-gray-700 dark:border-gray-200">
-          <h2 className="text-2xl font-semibold mb-4 text-white dark:text-gray-900 border-b border-gray-700 dark:border-gray-300 pb-2">
+        <div style={{
+          backgroundColor: theme.cardBackground,
+          borderRadius: '8px',
+          padding: '24px',
+          marginBottom: '24px',
+          boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+          border: `1px solid ${theme.border}`
+        }}>
+          <h2 style={{
+            fontSize: '24px',
+            fontWeight: '600',
+            marginBottom: '16px',
+            color: theme.textPrimary,
+            borderBottom: `1px solid ${theme.border}`,
+            paddingBottom: '8px',
+            margin: '0 0 16px 0'
+          }}>
             Add New Initiative
           </h2>
-          <div className="mb-4">
-            <label htmlFor="name" className="block text-sm font-medium text-gray-300 dark:text-gray-600 mb-2">
+          <div style={{ marginBottom: '16px' }}>
+            <label htmlFor="name" style={{
+              display: 'block',
+              fontSize: '14px',
+              fontWeight: '500',
+              color: theme.textSecondary,
+              marginBottom: '8px'
+            }}>
               Initiative Name
             </label>
             <input
@@ -492,11 +660,25 @@ function WSJFApp() {
               name="name"
               value={newInitiative.name}
               onChange={handleInitiativeChange}
-              className="w-full p-3 bg-gray-700 dark:bg-gray-50 border border-gray-600 dark:border-gray-300 rounded-lg text-white dark:text-gray-900 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              style={{
+                width: '100%',
+                padding: '12px',
+                backgroundColor: theme.background,
+                border: `1px solid ${theme.border}`,
+                borderRadius: '8px',
+                color: theme.textPrimary,
+                fontSize: '16px',
+                outline: 'none'
+              }}
               placeholder="Enter initiative name..."
             />
           </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-5 gap-4 mb-4">
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gap: '16px',
+            marginBottom: '16px'
+          }}>
             <ScoringSlider
               name="uv"
               value={newInitiative.uv}
@@ -504,6 +686,7 @@ function WSJFApp() {
               tooltipText={tooltips.uv}
               label="User Value (UV)"
               definitions={definitions.uv}
+              theme={theme}
             />
             <ScoringSlider
               name="tc"
@@ -512,6 +695,7 @@ function WSJFApp() {
               tooltipText={tooltips.tc}
               label="Time Criticality (TC)"
               definitions={definitions.tc}
+              theme={theme}
             />
             <ScoringSlider
               name="rr"
@@ -520,6 +704,7 @@ function WSJFApp() {
               tooltipText={tooltips.rr}
               label="Risk Reduction (RR)"
               definitions={definitions.rr}
+              theme={theme}
             />
             <ScoringSlider
               name="cr"
@@ -528,6 +713,7 @@ function WSJFApp() {
               tooltipText={tooltips.cr}
               label="Compliance/Regulatory (CR)"
               definitions={definitions.cr}
+              theme={theme}
             />
             <ScoringSlider
               name="jobSize"
@@ -546,102 +732,183 @@ function WSJFApp() {
                 40: 'Large epic (2 months)',
                 100: 'Major initiative (3+ months)'
               }}
+              theme={theme}
             />
           </div>
           <button
             onClick={addInitiative}
-            className="bg-blue-600 dark:bg-blue-500 hover:bg-blue-700 dark:hover:bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+            style={{
+              backgroundColor: theme.buttonPrimary,
+              color: 'white',
+              padding: '12px 24px',
+              borderRadius: '8px',
+              fontWeight: '600',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: '16px',
+              transition: 'background-color 150ms ease'
+            }}
           >
             Add Initiative
           </button>
         </div>
 
         {/* Results Table */}
-        <div className="bg-gray-800 dark:bg-white rounded-lg shadow-lg border border-gray-700 dark:border-gray-200 overflow-hidden">
-          <div className="flex justify-between items-center p-6 border-b border-gray-700 dark:border-gray-300">
-            <h2 className="text-2xl font-semibold text-white dark:text-gray-900">
+        <div style={{
+          backgroundColor: theme.cardBackground,
+          borderRadius: '8px',
+          boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+          border: `1px solid ${theme.border}`,
+          overflow: 'hidden'
+        }}>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            padding: '24px',
+            borderBottom: `1px solid ${theme.border}`
+          }}>
+            <h2 style={{
+              fontSize: '24px',
+              fontWeight: '600',
+              color: theme.textPrimary,
+              margin: 0
+            }}>
               Prioritized Initiatives ({rankedInitiatives.length})
             </h2>
             <button
               onClick={handleExportPdf}
               disabled={isExporting || initiatives.length === 0}
-              className="inline-flex items-center px-4 py-2 bg-green-600 dark:bg-green-500 text-white font-semibold rounded-md shadow-lg hover:bg-green-700 dark:hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '8px 16px',
+                backgroundColor: theme.buttonSuccess,
+                color: 'white',
+                fontWeight: '600',
+                borderRadius: '6px',
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                border: 'none',
+                cursor: isExporting || initiatives.length === 0 ? 'not-allowed' : 'pointer',
+                opacity: isExporting || initiatives.length === 0 ? 0.5 : 1,
+                transition: 'all 150ms ease'
+              }}
             >
-              <FileDown className="w-4 h-4 mr-2" />
+              <FileDown style={{ width: '16px', height: '16px' }} />
               {isExporting ? 'Generating PDF...' : 'Export to PDF'}
             </button>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-700 dark:bg-gray-50">
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead style={{ backgroundColor: theme.background }}>
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 dark:text-gray-600 uppercase tracking-wider">
+                  <th style={{ padding: '12px 24px', textAlign: 'left', fontSize: '12px', fontWeight: '500', color: theme.textSecondary, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     Rank
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 dark:text-gray-600 uppercase tracking-wider">
+                  <th style={{ padding: '12px 24px', textAlign: 'left', fontSize: '12px', fontWeight: '500', color: theme.textSecondary, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     Initiative
                   </th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-300 dark:text-gray-600 uppercase tracking-wider">
+                  <th style={{ padding: '12px 24px', textAlign: 'center', fontSize: '12px', fontWeight: '500', color: theme.textSecondary, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     Cost of Delay
                   </th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-300 dark:text-gray-600 uppercase tracking-wider">
+                  <th style={{ padding: '12px 24px', textAlign: 'center', fontSize: '12px', fontWeight: '500', color: theme.textSecondary, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     Job Size
                   </th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-300 dark:text-gray-600 uppercase tracking-wider">
+                  <th style={{ padding: '12px 24px', textAlign: 'center', fontSize: '12px', fontWeight: '500', color: theme.textSecondary, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     WSJF Score
                   </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-300 dark:text-gray-600 uppercase tracking-wider">
+                  <th style={{ padding: '12px 24px', textAlign: 'right', fontSize: '12px', fontWeight: '500', color: theme.textSecondary, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     Actions
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-600 dark:divide-gray-200">
+              <tbody style={{ backgroundColor: theme.cardBackground }}>
                 {rankedInitiatives.length > 0 ? (
                   rankedInitiatives.map((item, index) => (
-                    <tr key={item.id} className="hover:bg-gray-700/50 dark:hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4 whitespace-nowrap">
+                    <tr 
+                      key={item.id} 
+                      style={{ 
+                        borderTop: `1px solid ${theme.border}`,
+                        transition: 'background-color 150ms ease'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = theme.hoverOverlay;
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = 'transparent';
+                      }}
+                    >
+                      <td style={{ padding: '16px 24px', whiteSpace: 'nowrap' }}>
                         <span
-                          className={`inline-flex items-center justify-center w-8 h-8 rounded-full text-sm font-bold ${
-                            index === 0
-                              ? 'bg-green-500 text-white'
-                              : index === 1
-                              ? 'bg-yellow-500 text-gray-900'
-                              : index === 2
-                              ? 'bg-orange-500 text-white'
-                              : 'bg-gray-600 dark:bg-gray-400 text-gray-200 dark:text-gray-800'
-                          }`}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            width: '32px',
+                            height: '32px',
+                            borderRadius: '50%',
+                            fontSize: '14px',
+                            fontWeight: 'bold',
+                            backgroundColor:
+                              index === 0 ? '#10b981' :
+                              index === 1 ? '#f59e0b' :
+                              index === 2 ? '#f97316' : theme.sliderBg,
+                            color:
+                              index === 0 ? 'white' :
+                              index === 1 ? '#1f2937' :
+                              index === 2 ? 'white' : theme.textPrimary
+                          }}
                         >
                           {index + 1}
                         </span>
                       </td>
-                      <td className="py-4 whitespace-nowrap">
-                        <div className="font-medium text-white dark:text-gray-900">{item.name}</div>
-                        <div className="text-xs text-gray-400 dark:text-gray-600 mt-1">
+                      <td style={{ padding: '16px 0px', whiteSpace: 'nowrap' }}>
+                        <div style={{ fontWeight: '500', color: theme.textPrimary }}>{item.name}</div>
+                        <div style={{ fontSize: '12px', color: theme.textMuted, marginTop: '4px' }}>
                           {`UV:${item.uv} | TC:${item.tc} | RR:${item.rr} | CR:${item.cr}`}
                         </div>
                       </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-center text-gray-300 dark:text-gray-700">
+                      <td style={{ padding: '16px 16px', whiteSpace: 'nowrap', textAlign: 'center', color: theme.textSecondary }}>
                         {item.costOfDelay.toFixed(0)}
                       </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-center text-gray-300 dark:text-gray-700">{item.jobSize}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-center text-xl font-bold text-blue-400 dark:text-blue-600">
+                      <td style={{ padding: '16px 16px', whiteSpace: 'nowrap', textAlign: 'center', color: theme.textSecondary }}>
+                        {item.jobSize}
+                      </td>
+                      <td style={{ padding: '16px 24px', whiteSpace: 'nowrap', textAlign: 'center', fontSize: '20px', fontWeight: 'bold', color: '#60a5fa' }}>
                         {item.wsjf.toFixed(2)}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">
+                      <td style={{ padding: '16px 24px', whiteSpace: 'nowrap', textAlign: 'right' }}>
                         <button
                           onClick={() => deleteInitiative(item.id)}
-                          className="text-gray-500 dark:text-gray-400 hover:text-red-500 dark:hover:text-red-600 transition-colors p-2 rounded-full hover:bg-red-500/10 dark:hover:bg-red-500/10"
+                          style={{
+                            color: theme.textMuted,
+                            backgroundColor: 'transparent',
+                            border: 'none',
+                            cursor: 'pointer',
+                            padding: '8px',
+                            borderRadius: '50%',
+                            transition: 'all 150ms ease'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.color = '#ef4444';
+                            e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.1)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.color = theme.textMuted;
+                            e.currentTarget.style.backgroundColor = 'transparent';
+                          }}
                         >
-                          <Trash2 className="w-5 h-5" />
+                          <Trash2 style={{ width: '20px', height: '20px' }} />
                         </button>
                       </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={6} className="text-center py-16 px-6">
-                      <h3 className="text-lg font-medium text-white dark:text-gray-900">No initiatives yet.</h3>
-                      <p className="mt-1 text-sm text-gray-400 dark:text-gray-600">
+                    <td colSpan={6} style={{ textAlign: 'center', padding: '64px 24px' }}>
+                      <h3 style={{ fontSize: '18px', fontWeight: '500', color: theme.textPrimary, margin: '0 0 8px 0' }}>No initiatives yet.</h3>
+                      <p style={{ margin: 0, fontSize: '14px', color: theme.textMuted }}>
                         Use the form above to add your first software initiative.
                       </p>
                     </td>
@@ -652,6 +919,31 @@ function WSJFApp() {
           </div>
         </div>
       </div>
+
+      {/* CSS for animations */}
+      <style>{`
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+        
+        input[type="range"]::-webkit-slider-thumb {
+          appearance: none;
+          width: 20px;
+          height: 20px;
+          border-radius: 50%;
+          background: #3b82f6;
+          cursor: pointer;
+        }
+        
+        input[type="range"]::-moz-range-thumb {
+          width: 20px;
+          height: 20px;
+          border-radius: 50%;
+          background: #3b82f6;
+          cursor: pointer;
+          border: none;
+        }
+      `}</style>
     </div>
   );
 }
