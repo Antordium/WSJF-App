@@ -3,8 +3,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { HelpCircle, Trash2, Database, Sun, Moon, FileDown } from 'lucide-react';
 
 // --- Constants ---
-const FIBONACCI_SCORES = [1, 3, 6, 8, 10, 13, 20, 40, 100];
-const ALLOWED_SCORES = [1, 3, 6, 8, 10, 13, 20, 40, 100];
+const FIBONACCI_SCORES_LIMITED = [1, 3, 6, 8, 10]; // For UV, TC, RR, CR
+const FIBONACCI_SCORES_FULL = [1, 3, 6, 8, 10, 13, 20, 40, 100]; // For Job Size
 
 // --- Definitions ---
 const definitions = {
@@ -153,6 +153,7 @@ interface ScoringSliderProps {
   label: string;
   definitions: Record<number, string>;
   theme: any;
+  isJobSize?: boolean;
 }
 
 const ScoringSlider = ({
@@ -162,14 +163,18 @@ const ScoringSlider = ({
   tooltipText,
   label,
   definitions,
-  theme
+  theme,
+  isJobSize = false
 }: ScoringSliderProps): React.JSX.Element => {
-  const valueIndex = ALLOWED_SCORES.indexOf(value);
+  const allowedScores = isJobSize ? FIBONACCI_SCORES_FULL : FIBONACCI_SCORES_LIMITED;
+  const valueIndex = allowedScores.indexOf(value);
+  
   const handleChange = (e: { target: { value: string } }) => {
     const newIndex = parseInt(e.target.value, 10);
-    const newValue = ALLOWED_SCORES[newIndex];
+    const newValue = allowedScores[newIndex];
     handler({ target: { name: name, value: newValue } });
   };
+  
   const currentDefinition = definitions[value];
   
   return (
@@ -197,7 +202,7 @@ const ScoringSlider = ({
         id={name}
         name={name}
         min="0"
-        max={FIBONACCI_SCORES.length - 1}
+        max={allowedScores.length - 1}
         value={valueIndex}
         onChange={handleChange}
         style={{
@@ -308,7 +313,7 @@ function WSJFApp() {
   // --- PDF Export Function ---
   const handleExportPdf = async () => {
     if (initiatives.length === 0) {
-      alert('Please add some initiatives first.');
+      alert('Please add some objectives first.');
       return;
     }
 
@@ -366,7 +371,7 @@ function WSJFApp() {
       // Add table using autoTable
       if (typeof (doc as any).autoTable === 'function') {
         (doc as any).autoTable({
-          head: [['Rank', 'Initiative', 'UV', 'TC', 'RR', 'CR', 'Job Size', 'CoD', 'WSJF']],
+          head: [['Rank', 'Objective', 'UV', 'TC', 'RR', 'CR', 'Job Size', 'CoD', 'WSJF']],
           body: tableData,
           startY: 70,
           styles: { 
@@ -397,7 +402,7 @@ function WSJFApp() {
         // Fallback: add table data as text if autoTable fails
         let yPosition = 70;
         doc.setFontSize(8);
-        doc.text('Rank | Initiative | UV | TC | RR | CR | Job Size | CoD | WSJF', 14, yPosition);
+        doc.text('Rank | Objective | UV | TC | RR | CR | Job Size | CoD | WSJF', 14, yPosition);
         yPosition += 5;
         
         tableData.forEach((row) => {
@@ -624,7 +629,7 @@ function WSJFApp() {
           </div>
         </div>
 
-        {/* Initiative Input Form */}
+        {/* Objective Input Form */}
         <div style={{
           backgroundColor: theme.cardBackground,
           borderRadius: '8px',
@@ -642,7 +647,7 @@ function WSJFApp() {
             paddingBottom: '8px',
             margin: '0 0 16px 0'
           }}>
-            Add New Initiative
+            Add New Objective
           </h2>
           <div style={{ marginBottom: '16px' }}>
             <label htmlFor="name" style={{
@@ -652,7 +657,7 @@ function WSJFApp() {
               color: theme.textSecondary,
               marginBottom: '8px'
             }}>
-              Initiative Name
+              Objective Name
             </label>
             <input
               type="text"
@@ -670,7 +675,7 @@ function WSJFApp() {
                 fontSize: '16px',
                 outline: 'none'
               }}
-              placeholder="Enter initiative name..."
+              placeholder="Enter objective name..."
             />
           </div>
           <div style={{
@@ -733,6 +738,7 @@ function WSJFApp() {
                 100: 'Major initiative (3+ months)'
               }}
               theme={theme}
+              isJobSize={true}
             />
           </div>
           <button
@@ -749,7 +755,7 @@ function WSJFApp() {
               transition: 'background-color 150ms ease'
             }}
           >
-            Add Initiative
+            Add Objective
           </button>
         </div>
 
@@ -774,7 +780,7 @@ function WSJFApp() {
               color: theme.textPrimary,
               margin: 0
             }}>
-              Prioritized Initiatives ({rankedInitiatives.length})
+              Prioritized Objectives ({rankedInitiatives.length})
             </h2>
             <button
               onClick={handleExportPdf}
@@ -807,7 +813,7 @@ function WSJFApp() {
                     Rank
                   </th>
                   <th style={{ padding: '12px 24px', textAlign: 'left', fontSize: '12px', fontWeight: '500', color: theme.textSecondary, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    Initiative
+                    Objective
                   </th>
                   <th style={{ padding: '12px 24px', textAlign: 'center', fontSize: '12px', fontWeight: '500', color: theme.textSecondary, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     Cost of Delay
@@ -907,9 +913,9 @@ function WSJFApp() {
                 ) : (
                   <tr>
                     <td colSpan={6} style={{ textAlign: 'center', padding: '64px 24px' }}>
-                      <h3 style={{ fontSize: '18px', fontWeight: '500', color: theme.textPrimary, margin: '0 0 8px 0' }}>No initiatives yet.</h3>
+                      <h3 style={{ fontSize: '18px', fontWeight: '500', color: theme.textPrimary, margin: '0 0 8px 0' }}>No objectives yet.</h3>
                       <p style={{ margin: 0, fontSize: '14px', color: theme.textMuted }}>
-                        Use the form above to add your first software initiative.
+                        Use the form above to add your first objective.
                       </p>
                     </td>
                   </tr>
