@@ -2,10 +2,12 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  swcMinify: true,
+  // swcMinify is deprecated and enabled by default in Next.js 16
   experimental: {
     esmExternals: true,
   },
+  // Turbopack configuration (empty config to silence warning, works without custom config)
+  turbopack: {},
   webpack: (config, { isServer, webpack }) => {
     // Client-side configurations
     if (!isServer) {
@@ -17,7 +19,7 @@ const nextConfig = {
         crypto: false,
       };
     }
-    
+
     // Handle PDF libraries
     config.module.rules.push({
       test: /\.m?js$/,
@@ -33,7 +35,7 @@ const nextConfig = {
         resourceRegExp: /^canvas$/,
       })
     );
-    
+
     return config;
   },
   // Optimize for Vercel deployment
