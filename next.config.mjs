@@ -38,12 +38,16 @@ const nextConfig = {
 
     return config;
   },
-  // Optimize for Vercel deployment
-  output: 'standalone',
+  // Static export for GitHub Pages deployment
+  output: 'export',
+  basePath: process.env.GITHUB_PAGES === 'true' ? '/WSJF-App' : '',
+  assetPrefix: process.env.GITHUB_PAGES === 'true' ? '/WSJF-App/' : '',
+  images: {
+    unoptimized: true,
+  },
   poweredByHeader: false,
   compress: true,
-  // Handle static optimization
-  trailingSlash: false,
+  trailingSlash: true,
   // Environment variables
   env: {
     NEXT_PUBLIC_APP_NAME: 'WSJF Calculator',
