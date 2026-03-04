@@ -1,5 +1,5 @@
 /**
- * WSJF Calculator - v4.1 (Signal Strength)
+ * WSJF Calculator - v5.0 (Signal Strength)
  *
  * Weighted Shortest Job First (WSJF) prioritization tool for SAFe/Agile teams.
  * Helps teams prioritize work based on Cost of Delay divided by effort (sprints).
@@ -39,6 +39,9 @@ type ServiceType =
   | 'FLTCYBER'
   | 'MARFORCYBER'
   | 'AFCYBER'
+  | 'CGCYBER'
+  | 'CNMF'
+  | 'DCDC'
   | 'Other';
 
 interface UVVote {
@@ -79,7 +82,7 @@ const PERSONA_WEIGHTS: Record<PersonaType, number> = {
 };
 
 const PERSONA_LABELS: Record<PersonaType, string> = {
-  USCYBERCOM: 'USCYBERCOM (J7 Staff)',
+  USCYBERCOM: 'USCYBERCOM',
   Operator: 'Operator',
   Trainer: 'Trainer',
   ContentAuthor: 'Content Author / Range Engineer',
@@ -93,6 +96,9 @@ const SERVICE_LABELS: Record<ServiceType, string> = {
   FLTCYBER: 'FLTCYBER',
   MARFORCYBER: 'MARFORCYBER',
   AFCYBER: 'AFCYBER',
+  CGCYBER: 'CGCYBER',
+  CNMF: 'CNMF',
+  DCDC: 'DCDC',
   Other: 'Other',
 };
 
@@ -101,7 +107,7 @@ const ALL_PERSONAS: PersonaType[] = [
 ];
 
 const ALL_SERVICES: ServiceType[] = [
-  'USCYBERCOM', 'ARCYBER', 'FLTCYBER', 'MARFORCYBER', 'AFCYBER', 'Other'
+  'USCYBERCOM', 'ARCYBER', 'FLTCYBER', 'MARFORCYBER', 'AFCYBER', 'CGCYBER', 'CNMF', 'DCDC', 'Other'
 ];
 
 const SIGNAL_STRENGTH_CAP = 2.0;
@@ -712,14 +718,14 @@ const UVVoteForm = ({ votes, onVotesChange, theme }: UVVoteFormProps) => {
             style={selectStyle}
           >
             {ALL_PERSONAS.map(p => (
-              <option key={p} value={p}>{PERSONA_LABELS[p]} ({PERSONA_WEIGHTS[p]}x)</option>
+              <option key={p} value={p}>{PERSONA_LABELS[p]}</option>
             ))}
           </select>
         </div>
 
         {/* Service */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, minWidth: '140px' }}>
-          <label style={{ fontSize: '12px', fontWeight: '500', color: theme.textSecondary }}>Service</label>
+          <label style={{ fontSize: '12px', fontWeight: '500', color: theme.textSecondary }}>Service/Sub-Unified</label>
           <select
             value={currentVote.service}
             onChange={(e) => setCurrentVote(prev => ({ ...prev, service: e.target.value as ServiceType }))}
@@ -802,7 +808,7 @@ const UVVoteForm = ({ votes, onVotesChange, theme }: UVVoteFormProps) => {
                 <tr style={{ borderBottom: `1px solid ${theme.border}` }}>
                   <th style={{ padding: '6px 8px', textAlign: 'center', color: theme.textMuted, fontWeight: '500' }}>Score</th>
                   <th style={{ padding: '6px 8px', textAlign: 'left', color: theme.textMuted, fontWeight: '500' }}>Persona</th>
-                  <th style={{ padding: '6px 8px', textAlign: 'left', color: theme.textMuted, fontWeight: '500' }}>Service</th>
+                  <th style={{ padding: '6px 8px', textAlign: 'left', color: theme.textMuted, fontWeight: '500' }}>Service/Sub-Unified</th>
                   <th style={{ padding: '6px 8px', textAlign: 'left', color: theme.textMuted, fontWeight: '500' }}>Voter</th>
                   <th style={{ padding: '6px 8px', textAlign: 'right', color: theme.textMuted, fontWeight: '500' }}>Actions</th>
                 </tr>
@@ -1392,7 +1398,7 @@ function WSJFApp() {
             margin: 0,
             textAlign: 'center'
           }}>
-            WSJF Calculator
+            WSJF Calculator v5
           </h1>
           <DarkModeToggle isDark={isDarkMode} onToggle={toggleDarkMode} />
         </div>
