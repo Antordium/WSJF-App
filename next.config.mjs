@@ -48,9 +48,9 @@ const nextConfig = {
   poweredByHeader: false,
   compress: true,
   trailingSlash: true,
-  // Environment variables
+  // Environment variables (Firebase config loaded from .env.local via NEXT_PUBLIC_ prefix)
   env: {
-    NEXT_PUBLIC_APP_NAME: 'WSJF Calculator',
+    NEXT_PUBLIC_APP_NAME: 'PCTE Business Value Voting Tool',
   },
 };
 
