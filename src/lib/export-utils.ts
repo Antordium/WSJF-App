@@ -31,7 +31,7 @@ function getPersonaCounts(voters: Record<string, VoterProfile>): Record<string, 
 
 export function exportResultsCSV(results: FeatureResult[], sessionTitle: string, voters: Record<string, VoterProfile> = {}) {
   const headers = [
-    'Rank', 'Feature', 'Jira #', 'Dev Team', 'Problem Solved',
+    'Rank', 'Feature', 'Type', 'Jira #', 'Dev Team', 'Problem Solved',
     'Vote Count', 'Unique Services', 'Unique Personas',
     'Raw UV Avg', 'UV Signal', 'Adjusted UV',
     'Raw TC Avg', 'TC Signal', 'Adjusted TC',
@@ -41,6 +41,7 @@ export function exportResultsCSV(results: FeatureResult[], sessionTitle: string,
   const rows = results.map((r, i) => [
     i + 1,
     `"${r.featureName.replace(/"/g, '""')}"`,
+    r.featureType === 'architecture' ? 'Architecture' : 'User-Facing',
     `"${r.jiraNumber.replace(/"/g, '""')}"`,
     `"${r.developerTeam.replace(/"/g, '""')}"`,
     `"${r.problemSolved.replace(/"/g, '""')}"`,
@@ -164,6 +165,7 @@ export async function exportResultsPDF(
     const tableData = teamResults.map((r, index) => [
       (index + 1).toString(),
       r.featureName,
+      r.featureType === 'architecture' ? 'Arch' : 'User',
       r.jiraNumber,
       r.voteCount.toString(),
       r.adjustedUV.toFixed(1),
@@ -179,7 +181,7 @@ export async function exportResultsPDF(
 
     if (typeof (doc as any).autoTable === 'function') {
       (doc as any).autoTable({
-        head: [['#', 'Feature', 'Jira', 'Votes', 'UV(Adj)', 'UV Sig', 'TC(Adj)', 'TC Sig', 'RR', 'CR', 'CoD', 'Sprints', 'WSJF']],
+        head: [['#', 'Feature', 'Type', 'Jira', 'Votes', 'UV(Adj)', 'UV Sig', 'TC(Adj)', 'TC Sig', 'RR', 'CR', 'CoD', 'Sprints', 'WSJF']],
         body: tableData,
         startY,
         styles: { fontSize: 8, cellPadding: 2, lineColor: [220, 220, 220], lineWidth: 0.5 },
@@ -187,18 +189,19 @@ export async function exportResultsPDF(
         alternateRowStyles: { fillColor: [249, 250, 251] },
         columnStyles: {
           0: { halign: 'center', cellWidth: 10, fontStyle: 'bold' },
-          1: { cellWidth: 50 },
-          2: { cellWidth: 22 },
-          3: { halign: 'center', cellWidth: 14 },
-          4: { halign: 'center', cellWidth: 16 },
+          1: { cellWidth: 44 },
+          2: { halign: 'center', cellWidth: 14 },
+          3: { cellWidth: 20 },
+          4: { halign: 'center', cellWidth: 14 },
           5: { halign: 'center', cellWidth: 16 },
           6: { halign: 'center', cellWidth: 16 },
           7: { halign: 'center', cellWidth: 16 },
-          8: { halign: 'center', cellWidth: 10 },
+          8: { halign: 'center', cellWidth: 16 },
           9: { halign: 'center', cellWidth: 10 },
-          10: { halign: 'center', cellWidth: 16 },
+          10: { halign: 'center', cellWidth: 10 },
           11: { halign: 'center', cellWidth: 16 },
-          12: { halign: 'center', cellWidth: 18, fontStyle: 'bold', textColor: [59, 130, 246] },
+          12: { halign: 'center', cellWidth: 16 },
+          13: { halign: 'center', cellWidth: 18, fontStyle: 'bold', textColor: [59, 130, 246] },
         },
         didParseCell: function(data: any) {
           if (data.row.index < 3 && data.section === 'body' && data.column.index === 0) {

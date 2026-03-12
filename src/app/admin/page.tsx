@@ -9,7 +9,7 @@ import { getTheme } from '../../lib/theme';
 import { ALL_PERSONAS, ALL_SERVICES, PERSONA_LABELS, SERVICE_LABELS, definitions, RANK_OPTIONS } from '../../lib/constants';
 import { calculateFeatureWSJF } from '../../lib/algorithm';
 import { exportResultsCSV, exportResultsPDF } from '../../lib/export-utils';
-import type { Feature, VoterProfile, FeatureVote, FeatureResult, SessionMeta, SessionStatus, Weights } from '../../lib/types';
+import type { Feature, FeatureType, VoterProfile, FeatureVote, FeatureResult, SessionMeta, SessionStatus, Weights } from '../../lib/types';
 import {
   createSession,
   verifyAdminPin,
@@ -67,8 +67,8 @@ function AdminPageInner() {
   const [sessionTitle, setSessionTitle] = useState('');
   const [newPin, setNewPin] = useState('');
   const [featureInputs, setFeatureInputs] = useState<Array<{
-    name: string; jiraNumber: string; problemSolved: string; developerTeam: string;
-  }>>([{ name: '', jiraNumber: '', problemSolved: '', developerTeam: '' }]);
+    name: string; jiraNumber: string; problemSolved: string; developerTeam: string; featureType: FeatureType;
+  }>>([{ name: '', jiraNumber: '', problemSolved: '', developerTeam: '', featureType: 'user' }]);
 
   // Admin score entry state
   const [featureScores, setFeatureScores] = useState<Record<string, { rr: number; cr: number; sprints: number }>>({});
@@ -125,7 +125,7 @@ function AdminPageInner() {
   const handleCreateSession = async () => {
     if (!sessionTitle.trim()) { alert('Please enter a session title.'); return; }
     if (!newPin.trim() || newPin.length < 4) { alert('Please enter a 4+ digit admin PIN.'); return; }
-    const validFeatures = featureInputs.filter(f => f.name.trim());
+    const validFeatures = featureInputs.filter(f => f.name.trim()).map(f => ({ ...f, featureType: f.featureType || 'user' as const }));
     if (validFeatures.length === 0) { alert('Please add at least one feature.'); return; }
 
     try {
@@ -222,8 +222,7 @@ function AdminPageInner() {
       await saveResults(sessionId, resultsMap);
       await setSessionStatus(sessionId, 'results');
 
-      const teams = [...new Set(resultsList.map(r => r.developerTeam))].sort();
-      if (teams.length > 0) setActiveTeamTab(teams[0]);
+      setActiveTeamTab('All');
     }
   };
 
@@ -277,7 +276,7 @@ function AdminPageInner() {
 
   // Feature form helpers
   const addFeatureRow = () => {
-    setFeatureInputs(prev => [...prev, { name: '', jiraNumber: '', problemSolved: '', developerTeam: '' }]);
+    setFeatureInputs(prev => [...prev, { name: '', jiraNumber: '', problemSolved: '', developerTeam: '', featureType: 'user' }]);
   };
 
   const removeFeatureRow = (index: number) => {
@@ -315,6 +314,7 @@ function AdminPageInner() {
         const jiraCol = findCol(['jira', 'ticket', 'issue', 'key', 'id']);
         const teamCol = findCol(['team', 'developer', 'dev', 'squad', 'group']);
         const problemCol = findCol(['problem', 'description', 'desc', 'summary', 'detail']);
+        const typeCol = findCol(['type', 'category', 'arch', 'kind']);
 
         if (!nameCol) {
           alert(`Could not find a "Feature Name" column.\n\nDetected columns: ${headers.join(', ')}\n\nExpected a column containing one of: feature, name, title, capability, epic, story`);
@@ -322,12 +322,17 @@ function AdminPageInner() {
         }
 
         const parsed = rows
-          .map(row => ({
-            name: String(row[nameCol] || '').trim(),
-            jiraNumber: jiraCol ? String(row[jiraCol] || '').trim() : '',
-            developerTeam: teamCol ? String(row[teamCol] || '').trim() : '',
-            problemSolved: problemCol ? String(row[problemCol] || '').trim() : '',
-          }))
+          .map(row => {
+            const typeVal = typeCol ? String(row[typeCol] || '').trim().toLowerCase() : '';
+            const isArch = ['arch', 'architecture', 'infra', 'infrastructure', 'platform', 'technical'].some(k => typeVal.includes(k));
+            return {
+              name: String(row[nameCol] || '').trim(),
+              jiraNumber: jiraCol ? String(row[jiraCol] || '').trim() : '',
+              developerTeam: teamCol ? String(row[teamCol] || '').trim() : '',
+              problemSolved: problemCol ? String(row[problemCol] || '').trim() : '',
+              featureType: (isArch ? 'architecture' : 'user') as FeatureType,
+            };
+          })
           .filter(f => f.name); // Skip empty rows
 
         if (parsed.length === 0) {
@@ -341,7 +346,8 @@ function AdminPageInner() {
           return [...existing, ...parsed];
         });
 
-        alert(`Imported ${parsed.length} features from "${file.name}"${jiraCol ? '' : '\n(No Jira column detected)'}${teamCol ? '' : '\n(No Team column detected)'}`);
+        const archCount = parsed.filter(f => f.featureType === 'architecture').length;
+        alert(`Imported ${parsed.length} features from "${file.name}"${archCount > 0 ? `\n(${archCount} architecture, ${parsed.length - archCount} user-facing)` : ''}${jiraCol ? '' : '\n(No Jira column detected)'}${teamCol ? '' : '\n(No Team column detected)'}${typeCol ? '' : '\n(No Type column detected — all set to User-Facing)'}`);
       } catch (err) {
         console.error('File parse error:', err);
         alert('Failed to parse file. Ensure it is a valid CSV or Excel file.');
@@ -476,7 +482,20 @@ function AdminPageInner() {
                   border: `1px solid ${theme.border}`,
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                    <span style={{ fontSize: '13px', fontWeight: '600', color: theme.textMuted }}>Feature #{index + 1}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <span style={{ fontSize: '13px', fontWeight: '600', color: theme.textMuted }}>Feature #{index + 1}</span>
+                      <button
+                        onClick={() => updateFeatureInput(index, 'featureType', fi.featureType === 'user' ? 'architecture' : 'user')}
+                        style={{
+                          padding: '3px 10px', borderRadius: '12px', border: 'none', cursor: 'pointer',
+                          fontSize: '11px', fontWeight: '600', letterSpacing: '0.03em',
+                          backgroundColor: fi.featureType === 'architecture' ? '#7c3aed' : '#3b82f6',
+                          color: 'white',
+                        }}
+                      >
+                        {fi.featureType === 'architecture' ? 'ARCH' : 'USER'}
+                      </button>
+                    </div>
                     {featureInputs.length > 1 && (
                       <button onClick={() => removeFeatureRow(index)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', padding: '4px' }}>
                         <Trash2 size={16} />
@@ -589,10 +608,17 @@ function AdminPageInner() {
             {sortedFeatures.map((f, i) => (
               <div key={f.id} style={{ padding: '10px 12px', borderBottom: `1px solid ${theme.border}`, display: 'flex', gap: '12px', alignItems: 'center' }}>
                 <span style={{ color: theme.textMuted, fontSize: '13px', fontWeight: '600', minWidth: '24px' }}>{i + 1}.</span>
-                <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                  <span style={{
+                    padding: '2px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: '600',
+                    backgroundColor: f.featureType === 'architecture' ? '#7c3aed' : '#3b82f6',
+                    color: 'white',
+                  }}>
+                    {f.featureType === 'architecture' ? 'ARCH' : 'USER'}
+                  </span>
                   <span style={{ color: theme.textPrimary, fontWeight: '500' }}>{f.name}</span>
-                  {f.jiraNumber && <span style={{ color: theme.textMuted, fontSize: '12px', marginLeft: '8px' }}>({f.jiraNumber})</span>}
-                  <span style={{ color: '#60a5fa', fontSize: '12px', marginLeft: '8px' }}>{f.developerTeam}</span>
+                  {f.jiraNumber && <span style={{ color: theme.textMuted, fontSize: '12px' }}>({f.jiraNumber})</span>}
+                  <span style={{ color: '#60a5fa', fontSize: '12px' }}>{f.developerTeam}</span>
                 </div>
               </div>
             ))}
@@ -644,7 +670,16 @@ function AdminPageInner() {
             <div style={cardStyle}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
                 <div>
-                  <h2 style={{ fontSize: '24px', fontWeight: '700', color: theme.textPrimary, margin: '0 0 4px 0' }}>{currentFeature.name}</h2>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
+                    <h2 style={{ fontSize: '24px', fontWeight: '700', color: theme.textPrimary, margin: 0 }}>{currentFeature.name}</h2>
+                    <span style={{
+                      padding: '3px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: '600',
+                      backgroundColor: currentFeature.featureType === 'architecture' ? '#7c3aed' : '#3b82f6',
+                      color: 'white',
+                    }}>
+                      {currentFeature.featureType === 'architecture' ? 'ARCHITECTURE' : 'USER-FACING'}
+                    </span>
+                  </div>
                   {currentFeature.jiraNumber && <span style={{ color: '#60a5fa', fontSize: '14px', fontWeight: '500' }}>{currentFeature.jiraNumber}</span>}
                   <span style={{ color: theme.textMuted, fontSize: '13px', marginLeft: '12px' }}>{currentFeature.developerTeam}</span>
                 </div>
@@ -900,8 +935,11 @@ function AdminPageInner() {
 
   if (sessionMeta?.status === 'results') {
     const teams = [...new Set(results.map(r => r.developerTeam))].sort();
-    const currentTeam = activeTeamTab || teams[0] || '';
-    const teamResults = results.filter(r => r.developerTeam === currentTeam).sort((a, b) => b.wsjf - a.wsjf);
+    const allTabs = ['All', ...teams];
+    const currentTeam = activeTeamTab || 'All';
+    const teamResults = currentTeam === 'All'
+      ? [...results].sort((a, b) => b.wsjf - a.wsjf)
+      : results.filter(r => r.developerTeam === currentTeam).sort((a, b) => b.wsjf - a.wsjf);
     const resultsUrl = typeof window !== 'undefined' ? `${window.location.origin}${window.location.pathname.replace('/admin/', '/results/')}?s=${sessionId}` : '';
 
     return (
@@ -945,23 +983,23 @@ function AdminPageInner() {
 
           {/* Team tabs */}
           <div style={{ display: 'flex', gap: '4px', marginBottom: '16px', flexWrap: 'wrap' }}>
-            {teams.map(team => (
+            {allTabs.map(tab => (
               <button
-                key={team}
-                onClick={() => setActiveTeamTab(team)}
+                key={tab}
+                onClick={() => setActiveTeamTab(tab)}
                 style={{
                   padding: '8px 18px',
                   borderRadius: '8px 8px 0 0',
                   border: `1px solid ${theme.border}`,
-                  borderBottom: currentTeam === team ? `2px solid #3b82f6` : `1px solid ${theme.border}`,
-                  backgroundColor: currentTeam === team ? theme.cardBackground : theme.background,
-                  color: currentTeam === team ? '#60a5fa' : theme.textMuted,
-                  fontWeight: currentTeam === team ? '600' : '400',
+                  borderBottom: currentTeam === tab ? `2px solid #3b82f6` : `1px solid ${theme.border}`,
+                  backgroundColor: currentTeam === tab ? theme.cardBackground : theme.background,
+                  color: currentTeam === tab ? '#60a5fa' : theme.textMuted,
+                  fontWeight: currentTeam === tab ? '600' : '400',
                   cursor: 'pointer',
                   fontSize: '14px',
                 }}
               >
-                {team}
+                {tab === 'All' ? `All (${results.length})` : tab}
               </button>
             ))}
           </div>
@@ -972,7 +1010,7 @@ function AdminPageInner() {
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead style={{ backgroundColor: theme.background }}>
                   <tr>
-                    {['#', 'Feature', 'Jira', 'Votes', 'UV(Adj)', 'UV Sig', 'TC(Adj)', 'TC Sig', 'RR', 'CR', 'CoD', 'Sprints', 'WSJF'].map(h => (
+                    {['#', 'Feature', 'Type', 'Jira', 'Votes', 'UV(Adj)', 'UV Sig', 'TC(Adj)', 'TC Sig', 'RR', 'CR', 'CoD', 'Sprints', 'WSJF'].map(h => (
                       <th key={h} style={{ padding: '10px 12px', textAlign: h === 'Feature' ? 'left' : 'center', fontSize: '11px', fontWeight: '600', color: theme.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</th>
                     ))}
                   </tr>
@@ -991,6 +1029,15 @@ function AdminPageInner() {
                       <td style={{ padding: '12px 8px' }}>
                         <div style={{ fontWeight: '500', color: theme.textPrimary }}>{r.featureName}</div>
                         {r.problemSolved && <div style={{ fontSize: '11px', color: theme.textMuted, marginTop: '2px' }}>{r.problemSolved}</div>}
+                      </td>
+                      <td style={{ padding: '12px 8px', textAlign: 'center' }}>
+                        <span style={{
+                          padding: '2px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: '600',
+                          backgroundColor: r.featureType === 'architecture' ? '#7c3aed' : '#3b82f6',
+                          color: 'white',
+                        }}>
+                          {r.featureType === 'architecture' ? 'ARCH' : 'USER'}
+                        </span>
                       </td>
                       <td style={{ padding: '12px 8px', textAlign: 'center', color: theme.textSecondary, fontSize: '13px' }}>{r.jiraNumber}</td>
                       <td style={{ padding: '12px 8px', textAlign: 'center', color: theme.textSecondary, fontSize: '13px' }}>{r.voteCount}</td>

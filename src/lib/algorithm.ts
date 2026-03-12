@@ -133,10 +133,15 @@ export function calculateFeatureWSJF(
   voterProfiles: Record<string, VoterProfile>,
   weights: Weights,
 ): FeatureResult {
+  const isArchitecture = feature.featureType === 'architecture';
+
   const uvVotes = buildVotesForSignalStrength(featureVotes, voterProfiles, fv => fv.uv);
   const tcVotes = buildVotesForSignalStrength(featureVotes, voterProfiles, fv => fv.tc);
 
-  const uvResult = calculateSignalStrength(uvVotes);
+  // Architecture features: UV is fixed at 1.0 (no signal strength applied)
+  const uvResult = isArchitecture
+    ? { adjustedScore: 1.0, signalStrength: 1.0, breakdown: { weightedAverage: 1.0, volumeFactor: 1.0, serviceSpreadBonus: 1.0, personaSpreadBonus: 1.0, consensusBonus: 1.0, uncappedSignalStrength: 1.0 } }
+    : calculateSignalStrength(uvVotes);
   const tcResult = calculateSignalStrength(tcVotes);
 
   const rr = feature.rr ?? 3;
@@ -162,10 +167,11 @@ export function calculateFeatureWSJF(
     jiraNumber: feature.jiraNumber,
     developerTeam: feature.developerTeam,
     problemSolved: feature.problemSolved,
+    featureType: feature.featureType || 'user',
     voteCount: Object.keys(featureVotes).length,
     uniqueServices,
     uniquePersonas,
-    rawUVAvg,
+    rawUVAvg: isArchitecture ? 1.0 : rawUVAvg,
     uvSignalStrength: uvResult.signalStrength,
     adjustedUV: uvResult.adjustedScore,
     rawTCAvg,

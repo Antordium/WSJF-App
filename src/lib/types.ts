@@ -83,12 +83,15 @@ export interface VoterProfile {
   joinedAt: number;
 }
 
+export type FeatureType = 'user' | 'architecture';
+
 export interface Feature {
   id: string;
   name: string;
   jiraNumber: string;
   problemSolved: string;
   developerTeam: string;
+  featureType: FeatureType;
   order: number;
   votingOpen: boolean;
   rr: number | null;
@@ -122,6 +125,7 @@ export interface FeatureResult {
   costOfDelay: number;
   sprints: number;
   wsjf: number;
+  featureType: FeatureType;
 }
 
 export interface SessionMeta {

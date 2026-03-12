@@ -67,8 +67,11 @@ function ResultsPageInner() {
     return [...new Set(results.map(r => r.developerTeam))].sort();
   }, [results]);
 
-  const currentTeam = activeTeamTab || teams[0] || '';
-  const teamResults = results.filter(r => r.developerTeam === currentTeam).sort((a, b) => b.wsjf - a.wsjf);
+  const allTabs = ['All', ...teams];
+  const currentTeam = activeTeamTab || 'All';
+  const teamResults = currentTeam === 'All'
+    ? [...results].sort((a, b) => b.wsjf - a.wsjf)
+    : results.filter(r => r.developerTeam === currentTeam).sort((a, b) => b.wsjf - a.wsjf);
 
   // Exports
   const handleExportCSV = () => {
@@ -182,23 +185,23 @@ function ResultsPageInner() {
 
         {/* Team tabs */}
         <div style={{ display: 'flex', gap: '4px', marginBottom: '16px', flexWrap: 'wrap' }}>
-          {teams.map(team => (
+          {allTabs.map(tab => (
             <button
-              key={team}
-              onClick={() => setActiveTeamTab(team)}
+              key={tab}
+              onClick={() => setActiveTeamTab(tab)}
               style={{
                 padding: '10px 20px',
                 borderRadius: '8px 8px 0 0',
                 border: `1px solid ${theme.border}`,
-                borderBottom: currentTeam === team ? '2px solid #3b82f6' : `1px solid ${theme.border}`,
-                backgroundColor: currentTeam === team ? theme.cardBackground : theme.background,
-                color: currentTeam === team ? '#60a5fa' : theme.textMuted,
-                fontWeight: currentTeam === team ? '600' : '400',
+                borderBottom: currentTeam === tab ? '2px solid #3b82f6' : `1px solid ${theme.border}`,
+                backgroundColor: currentTeam === tab ? theme.cardBackground : theme.background,
+                color: currentTeam === tab ? '#60a5fa' : theme.textMuted,
+                fontWeight: currentTeam === tab ? '600' : '400',
                 cursor: 'pointer',
                 fontSize: '14px',
               }}
             >
-              {team}
+              {tab === 'All' ? `All (${results.length})` : tab}
             </button>
           ))}
         </div>
@@ -209,7 +212,7 @@ function ResultsPageInner() {
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead style={{ backgroundColor: theme.background }}>
                 <tr>
-                  {['#', 'Feature', 'Jira', 'Votes', 'UV(Adj)', 'UV Sig', 'TC(Adj)', 'TC Sig', 'RR', 'CR', 'CoD', 'Sprints', 'WSJF'].map(h => (
+                  {['#', 'Feature', 'Type', 'Jira', 'Votes', 'UV(Adj)', 'UV Sig', 'TC(Adj)', 'TC Sig', 'RR', 'CR', 'CoD', 'Sprints', 'WSJF'].map(h => (
                     <th key={h} style={{
                       padding: '12px', textAlign: h === 'Feature' ? 'left' : 'center',
                       fontSize: '11px', fontWeight: '600', color: theme.textMuted,
@@ -232,6 +235,15 @@ function ResultsPageInner() {
                     <td style={{ padding: '14px 8px' }}>
                       <div style={{ fontWeight: '500', color: theme.textPrimary }}>{r.featureName}</div>
                       {r.problemSolved && <div style={{ fontSize: '12px', color: theme.textMuted, marginTop: '2px' }}>{r.problemSolved}</div>}
+                    </td>
+                    <td style={{ padding: '14px 8px', textAlign: 'center' }}>
+                      <span style={{
+                        padding: '2px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: '600',
+                        backgroundColor: r.featureType === 'architecture' ? '#7c3aed' : '#3b82f6',
+                        color: 'white',
+                      }}>
+                        {r.featureType === 'architecture' ? 'ARCH' : 'USER'}
+                      </span>
                     </td>
                     <td style={{ padding: '14px 8px', textAlign: 'center', color: theme.textSecondary, fontSize: '13px' }}>{r.jiraNumber}</td>
                     <td style={{ padding: '14px 8px', textAlign: 'center', color: theme.textSecondary, fontSize: '13px' }}>{r.voteCount}</td>

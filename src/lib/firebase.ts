@@ -77,6 +77,7 @@ export async function createSession(
       jiraNumber: f.jiraNumber,
       problemSolved: f.problemSolved,
       developerTeam: f.developerTeam,
+      featureType: f.featureType || 'user',
       order: index,
       votingOpen: false,
       rr: null,

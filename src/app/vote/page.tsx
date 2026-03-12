@@ -132,7 +132,9 @@ function VotePageInner() {
   const handleSubmitVote = async () => {
     if (!sessionId || !currentFeature || !voterId) return;
     try {
-      await submitVote(sessionId, currentFeature.id, voterId, uvScore, tcScore);
+      // Architecture features: UV is always 1 (not voted on)
+      const finalUv = currentFeature.featureType === 'architecture' ? 1 : uvScore;
+      await submitVote(sessionId, currentFeature.id, voterId, finalUv, tcScore);
       setHasVoted(true);
     } catch (e) {
       console.error('Vote error:', e);
@@ -316,7 +318,16 @@ function VotePageInner() {
 
           {/* Feature info */}
           <div style={{ backgroundColor: theme.cardBackground, borderRadius: '12px', padding: '20px', border: `1px solid ${theme.border}`, marginBottom: '20px' }}>
-            <h2 style={{ fontSize: '20px', fontWeight: '700', color: theme.textPrimary, margin: '0 0 6px 0' }}>{currentFeature.name}</h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+              <h2 style={{ fontSize: '20px', fontWeight: '700', color: theme.textPrimary, margin: 0 }}>{currentFeature.name}</h2>
+              <span style={{
+                padding: '3px 10px', borderRadius: '12px', fontSize: '10px', fontWeight: '600',
+                backgroundColor: currentFeature.featureType === 'architecture' ? '#7c3aed' : '#3b82f6',
+                color: 'white',
+              }}>
+                {currentFeature.featureType === 'architecture' ? 'ARCH' : 'USER'}
+              </span>
+            </div>
             {currentFeature.jiraNumber && <span style={{ color: '#60a5fa', fontSize: '14px', fontWeight: '500' }}>{currentFeature.jiraNumber}</span>}
             {currentFeature.problemSolved && (
               <p style={{ color: theme.textSecondary, fontSize: '14px', marginTop: '10px', padding: '10px', backgroundColor: theme.background, borderRadius: '8px', margin: '10px 0 0 0' }}>
@@ -335,33 +346,44 @@ function VotePageInner() {
           ) : (
             /* Vote form */
             <div style={{ backgroundColor: theme.cardBackground, borderRadius: '12px', padding: '20px', border: `1px solid ${theme.border}` }}>
-              {/* Business Value */}
-              <div style={{ marginBottom: '24px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                  <h3 style={{ fontSize: '16px', fontWeight: '600', color: theme.textPrimary, margin: 0 }}>Business Value (UV)</h3>
-                  <span style={{ fontSize: '24px', fontWeight: 'bold', color: '#60a5fa' }}>{uvScore}</span>
+              {/* Business Value — hidden for architecture features */}
+              {currentFeature.featureType === 'architecture' ? (
+                <div style={{ marginBottom: '24px', padding: '14px', backgroundColor: 'rgba(124, 58, 237, 0.1)', borderRadius: '10px', border: '1px solid rgba(124, 58, 237, 0.3)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '14px', fontWeight: '600', color: '#a78bfa' }}>Business Value (UV) = 1</span>
+                  </div>
+                  <p style={{ fontSize: '12px', color: theme.textMuted, margin: '6px 0 0 0' }}>
+                    Architecture items have a fixed UV of 1. Vote on Time Criticality below.
+                  </p>
                 </div>
-                <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
-                  {[1, 2, 3, 4, 5].map(score => (
-                    <button
-                      key={score}
-                      onClick={() => setUvScore(score)}
-                      style={{
-                        flex: 1, padding: '14px 0', borderRadius: '10px', border: 'none', cursor: 'pointer',
-                        fontSize: '18px', fontWeight: '700', transition: 'all 150ms ease',
-                        backgroundColor: uvScore === score ? '#3b82f6' : theme.sliderBg,
-                        color: uvScore === score ? 'white' : theme.textPrimary,
-                        transform: uvScore === score ? 'scale(1.05)' : 'scale(1)',
-                      }}
-                    >
-                      {score}
-                    </button>
-                  ))}
+              ) : (
+                <div style={{ marginBottom: '24px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                    <h3 style={{ fontSize: '16px', fontWeight: '600', color: theme.textPrimary, margin: 0 }}>Business Value (UV)</h3>
+                    <span style={{ fontSize: '24px', fontWeight: 'bold', color: '#60a5fa' }}>{uvScore}</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                    {[1, 2, 3, 4, 5].map(score => (
+                      <button
+                        key={score}
+                        onClick={() => setUvScore(score)}
+                        style={{
+                          flex: 1, padding: '14px 0', borderRadius: '10px', border: 'none', cursor: 'pointer',
+                          fontSize: '18px', fontWeight: '700', transition: 'all 150ms ease',
+                          backgroundColor: uvScore === score ? '#3b82f6' : theme.sliderBg,
+                          color: uvScore === score ? 'white' : theme.textPrimary,
+                          transform: uvScore === score ? 'scale(1.05)' : 'scale(1)',
+                        }}
+                      >
+                        {score}
+                      </button>
+                    ))}
+                  </div>
+                  <p style={{ fontSize: '12px', color: theme.textMuted, margin: 0 }}>
+                    {definitions.uv[uvScore]}
+                  </p>
                 </div>
-                <p style={{ fontSize: '12px', color: theme.textMuted, margin: 0 }}>
-                  {definitions.uv[uvScore]}
-                </p>
-              </div>
+              )}
 
               {/* Time Criticality */}
               <div style={{ marginBottom: '24px' }}>
