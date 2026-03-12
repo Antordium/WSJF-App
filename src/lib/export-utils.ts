@@ -1,4 +1,4 @@
-import type { FeatureResult, VoterProfile, PersonaType, ServiceType } from './types';
+import type { FeatureResult, FeatureVote, VoterProfile, PersonaType, ServiceType } from './types';
 import { PERSONA_LABELS, SERVICE_LABELS, PERSONA_WEIGHTS } from './constants';
 
 // ===========================
@@ -25,11 +25,42 @@ function getPersonaCounts(voters: Record<string, VoterProfile>): Record<string, 
   return counts;
 }
 
+// Per-feature voter breakdown: which personas and services voted on each feature
+function getFeatureVoterBreakdown(
+  featureId: string,
+  allVotes: Record<string, Record<string, FeatureVote>>,
+  voters: Record<string, VoterProfile>,
+): { personas: string[]; services: string[]; voteCount: number } {
+  const featureVotes = allVotes[featureId] || {};
+  const voterIds = Object.keys(featureVotes);
+  const personaSet = new Set<string>();
+  const serviceSet = new Set<string>();
+
+  for (const voterId of voterIds) {
+    const voter = voters[voterId];
+    if (voter) {
+      personaSet.add(PERSONA_LABELS[voter.persona as PersonaType] || voter.persona);
+      serviceSet.add(SERVICE_LABELS[voter.service as ServiceType] || voter.service);
+    }
+  }
+
+  return {
+    personas: [...personaSet].sort(),
+    services: [...serviceSet].sort(),
+    voteCount: voterIds.length,
+  };
+}
+
 // ===========================
 // CSV EXPORT
 // ===========================
 
-export function exportResultsCSV(results: FeatureResult[], sessionTitle: string, voters: Record<string, VoterProfile> = {}) {
+export function exportResultsCSV(
+  results: FeatureResult[],
+  sessionTitle: string,
+  voters: Record<string, VoterProfile> = {},
+  allVotes: Record<string, Record<string, FeatureVote>> = {},
+) {
   const headers = [
     'Rank', 'Feature', 'Type', 'Jira #', 'Dev Team', 'Description',
     'Vote Count', 'Unique Services', 'Unique Personas',
@@ -86,10 +117,46 @@ export function exportResultsCSV(results: FeatureResult[], sessionTitle: string,
       .map(([persona, { count, weight }]) => `${persona},${count},${weight}`),
   ];
 
+  // Feature Voting Analytics section (admin only — when allVotes is provided)
+  const hasAllVotes = Object.keys(allVotes).length > 0;
+  const analyticsRows: string[] = [];
+
+  if (hasAllVotes && voterCount > 0) {
+    const analyticsSorted = [...results].sort((a, b) => {
+      const bvDiff = b.adjustedBV - a.adjustedBV;
+      if (Math.abs(bvDiff) > 0.01) return bvDiff;
+      return b.voteCount - a.voteCount;
+    });
+
+    analyticsRows.push(
+      '',
+      '',
+      'Feature Voting Analytics',
+      '',
+      'Rank,Feature,Dev Team,Adjusted BV,Votes,Personas,Services',
+    );
+
+    analyticsSorted.forEach((r, i) => {
+      const breakdown = getFeatureVoterBreakdown(r.featureId, allVotes, voters);
+      analyticsRows.push(
+        [
+          i + 1,
+          `"${r.featureName.replace(/"/g, '""')}"`,
+          `"${r.developerTeam.replace(/"/g, '""')}"`,
+          r.adjustedBV.toFixed(2),
+          breakdown.voteCount,
+          `"${breakdown.personas.join(', ')}"`,
+          `"${breakdown.services.join(', ')}"`,
+        ].join(','),
+      );
+    });
+  }
+
   const csvContent = [
     headers.join(','),
     ...rows.map(row => row.join(',')),
     ...(voterCount > 0 ? demographicsRows : []),
+    ...analyticsRows,
   ].join('\n');
 
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -111,10 +178,12 @@ export async function exportResultsPDF(
   results: FeatureResult[],
   sessionTitle: string,
   voters: Record<string, VoterProfile> = {},
+  allVotes: Record<string, Record<string, FeatureVote>> = {},
   voterCountOverride?: number,
 ) {
   const voterCount = voterCountOverride ?? Object.keys(voters).length;
   const hasVoterDetails = Object.keys(voters).length > 0;
+  const hasAllVotes = Object.keys(allVotes).length > 0;
   const jsPDFModule = await import('jspdf');
   const jsPDF = jsPDFModule.jsPDF || jsPDFModule.default;
   await import('jspdf-autotable');
@@ -139,17 +208,23 @@ export async function exportResultsPDF(
 
   doc.setTextColor(0, 0, 0);
 
-  // Group by developer team
+  // ===========================
+  // Group by developer team — each team on its own page
+  // ===========================
   const teams = [...new Set(results.map(r => r.developerTeam))].sort();
-  let startY = 48;
+  let isFirstTeam = true;
 
   for (const team of teams) {
     const teamResults = results
       .filter(r => r.developerTeam === team)
       .sort((a, b) => b.wsjf - a.wsjf);
 
-    // Check if we need a new page
-    if (startY > 170) {
+    // First team starts on the title page; subsequent teams get new pages
+    let startY: number;
+    if (isFirstTeam) {
+      startY = 48;
+      isFirstTeam = false;
+    } else {
       doc.addPage();
       startY = 20;
     }
@@ -159,7 +234,7 @@ export async function exportResultsPDF(
     doc.roundedRect(14, startY, 269, 10, 2, 2, 'F');
     doc.setFontSize(11);
     doc.setFont('helvetica', 'bold');
-    doc.text(`Developer Team: ${team}`, 18, startY + 7);
+    doc.text(`Developer Team: ${team} (${teamResults.length} features)`, 18, startY + 7);
     startY += 14;
 
     const tableData = teamResults.map((r, index) => [
@@ -212,13 +287,11 @@ export async function exportResultsPDF(
         },
         margin: { left: 14, right: 14 },
       });
-
-      startY = (doc as any).lastAutoTable.finalY + 12;
     }
   }
 
   // ===========================
-  // Voting Session Demographics page
+  // Voting Session Demographics page (admin only)
   // ===========================
   if (hasVoterDetails) {
     doc.addPage();
@@ -307,6 +380,77 @@ export async function exportResultsPDF(
         },
         margin: { left: 14, right: 14 },
         tableWidth: 240,
+      });
+    }
+  }
+
+  // ===========================
+  // Feature Voting Analytics page (admin only — when allVotes is provided)
+  // ===========================
+  if (hasAllVotes && hasVoterDetails) {
+    doc.addPage();
+
+    // Section header
+    doc.setFillColor(124, 58, 237);
+    doc.rect(0, 0, 297, 30, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(18);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Feature Voting Analytics', 148, 14, { align: 'center' });
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`All features sorted by Business Value & Vote Count | ${results.length} features`, 148, 24, { align: 'center' });
+
+    doc.setTextColor(0, 0, 0);
+
+    // Sort by adjusted BV descending, then vote count descending
+    const analyticsSorted = [...results].sort((a, b) => {
+      const bvDiff = b.adjustedBV - a.adjustedBV;
+      if (Math.abs(bvDiff) > 0.01) return bvDiff;
+      return b.voteCount - a.voteCount;
+    });
+
+    const analyticsData = analyticsSorted.map((r, index) => {
+      const breakdown = getFeatureVoterBreakdown(r.featureId, allVotes, voters);
+      return [
+        (index + 1).toString(),
+        r.featureName,
+        r.developerTeam,
+        r.featureType === 'architecture' ? 'Arch' : 'User',
+        r.adjustedBV.toFixed(1),
+        breakdown.voteCount.toString(),
+        breakdown.personas.join(', ') || 'Admin Only',
+        breakdown.services.join(', ') || 'N/A',
+      ];
+    });
+
+    if (typeof (doc as any).autoTable === 'function') {
+      (doc as any).autoTable({
+        head: [['#', 'Feature', 'Dev Team', 'Type', 'BV(Adj)', 'Votes', 'Voter Personas', 'Voter Services']],
+        body: analyticsData,
+        startY: 38,
+        styles: { fontSize: 7.5, cellPadding: 2.5, lineColor: [220, 220, 220], lineWidth: 0.5, overflow: 'linebreak' },
+        headStyles: { fillColor: [124, 58, 237], textColor: 255, fontStyle: 'bold', halign: 'center', fontSize: 8 },
+        alternateRowStyles: { fillColor: [249, 250, 251] },
+        columnStyles: {
+          0: { halign: 'center', cellWidth: 10, fontStyle: 'bold' },
+          1: { cellWidth: 40 },
+          2: { cellWidth: 28 },
+          3: { halign: 'center', cellWidth: 14 },
+          4: { halign: 'center', cellWidth: 16, fontStyle: 'bold', textColor: [59, 130, 246] },
+          5: { halign: 'center', cellWidth: 14, fontStyle: 'bold' },
+          6: { cellWidth: 68 },
+          7: { cellWidth: 78 },
+        },
+        didParseCell: function(data: any) {
+          // Highlight top 3 rows by BV
+          if (data.row.index < 3 && data.section === 'body' && data.column.index === 0) {
+            const colors = [[16, 185, 129], [245, 158, 11], [249, 115, 22]];
+            data.cell.styles.fillColor = colors[data.row.index];
+            data.cell.styles.textColor = [255, 255, 255];
+          }
+        },
+        margin: { left: 14, right: 14 },
       });
     }
   }

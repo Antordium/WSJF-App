@@ -323,14 +323,14 @@ function AdminPageInner() {
 
   const handleExportCSV = () => {
     if (results.length === 0) return;
-    exportResultsCSV(results, sessionMeta?.title || 'WSJF Results', voters);
+    exportResultsCSV(results, sessionMeta?.title || 'WSJF Results', voters, allVotes);
   };
 
   const handleExportPDF = async () => {
     if (results.length === 0) return;
     setIsExporting(true);
     try {
-      await exportResultsPDF(results, sessionMeta?.title || 'WSJF Results', voters);
+      await exportResultsPDF(results, sessionMeta?.title || 'WSJF Results', voters, allVotes);
     } finally {
       setIsExporting(false);
     }

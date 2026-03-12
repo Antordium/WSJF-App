@@ -83,7 +83,7 @@ function ResultsPageInner() {
     if (results.length === 0) return;
     setIsExporting(true);
     try {
-      await exportResultsPDF(results, sessionMeta?.title || 'WSJF Results', {}, Object.keys(voters).length);
+      await exportResultsPDF(results, sessionMeta?.title || 'WSJF Results', {}, {}, Object.keys(voters).length);
     } finally {
       setIsExporting(false);
     }
