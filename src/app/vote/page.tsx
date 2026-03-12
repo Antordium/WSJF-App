@@ -93,6 +93,13 @@ function VotePageInner() {
     return () => unsubs.forEach(u => u());
   }, [sessionId]);
 
+  // Reset scores when the feature changes
+  useEffect(() => {
+    setHasVoted(false);
+    setBvScore(3);
+    setTcScore(3);
+  }, [currentFeature?.id]);
+
   // Listen for votes on current feature to detect if we've already voted
   useEffect(() => {
     if (!sessionId || !currentFeature) return;
@@ -103,8 +110,6 @@ function VotePageInner() {
         setHasVoted(true);
       } else {
         setHasVoted(false);
-        setBvScore(3);
-        setTcScore(3);
       }
     });
     return () => unsub();
