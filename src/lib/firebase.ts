@@ -6,6 +6,7 @@ import {
   push,
   get,
   update,
+  remove,
   onValue,
   off,
   type DatabaseReference,
@@ -192,6 +193,51 @@ export async function updateFeatureScores(
   const updates: Record<string, number> = { rr, cr, sprints };
   if (tc !== undefined) updates.tc = tc;
   await update(ref(db, `sessions/${sessionId}/features/${featureId}`), updates);
+}
+
+// ===========================
+// SESSION RESET (preserve architecture votes)
+// ===========================
+
+export async function resetUserFeatureVoting(
+  sessionId: string,
+  userFeatureIds: string[],
+  firstUserFeatureIndex: number,
+) {
+  const db = getDb();
+
+  // Remove votes for user-facing features only
+  for (const fId of userFeatureIds) {
+    await remove(ref(db, `sessions/${sessionId}/votes/${fId}`));
+  }
+
+  // Reset user-facing feature scores back to null
+  for (const fId of userFeatureIds) {
+    await update(ref(db, `sessions/${sessionId}/features/${fId}`), {
+      votingOpen: false,
+      tc: null,
+      rr: null,
+      cr: null,
+      sprints: null,
+    });
+  }
+
+  // Clear results
+  await remove(ref(db, `sessions/${sessionId}/results`));
+
+  // Reset session to voting at the first user feature
+  await update(ref(db, `sessions/${sessionId}/meta`), {
+    status: 'voting',
+    currentFeatureIndex: firstUserFeatureIndex,
+  });
+
+  // Open voting on the first user feature
+  if (userFeatureIds.length > 0) {
+    const firstUserFeatureId = userFeatureIds[0];
+    await update(ref(db, `sessions/${sessionId}/features/${firstUserFeatureId}`), {
+      votingOpen: true,
+    });
+  }
 }
 
 // ===========================

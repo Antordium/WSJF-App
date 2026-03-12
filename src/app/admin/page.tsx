@@ -18,6 +18,7 @@ import {
   setFeatureVotingOpen,
   updateFeatureScores,
   saveResults,
+  resetUserFeatureVoting,
   listenToSessionMeta,
   listenToFeatures,
   listenToVoters,
@@ -278,6 +279,37 @@ function AdminPageInner() {
     await setSessionStatus(sessionId, 'results');
 
     setActiveTeamTab('All');
+  };
+
+  const handleResetUserFeatures = async () => {
+    if (!sessionId) return;
+    const confirmed = window.confirm(
+      'Reset voting for all user-facing features? Architecture scores will be preserved.'
+    );
+    if (!confirmed) return;
+
+    const userFeatureIds = sortedFeatures
+      .filter(f => (f.featureType || 'user') === 'user')
+      .map(f => f.id);
+    const firstUserIndex = sortedFeatures.findIndex(f => (f.featureType || 'user') === 'user');
+
+    if (firstUserIndex === -1 || userFeatureIds.length === 0) {
+      alert('No user-facing features found.');
+      return;
+    }
+
+    // Clear local score state for user features
+    setFeatureScores(prev => {
+      const next = { ...prev };
+      for (const fId of userFeatureIds) {
+        delete next[fId];
+      }
+      return next;
+    });
+    setInlineScoring(null);
+    setResults([]);
+
+    await resetUserFeatureVoting(sessionId, userFeatureIds, firstUserIndex);
   };
 
   const handleSaveScoresAndCalculate = async () => {
@@ -934,8 +966,11 @@ function AdminPageInner() {
                   </div>
                 </div>
 
-                {/* Action button */}
-                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                {/* Action buttons */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <button onClick={handleResetUserFeatures} style={{ ...buttonDanger, fontSize: '12px', padding: '8px 12px' }}>
+                    Reset User Features
+                  </button>
                   <button onClick={handleLockAndAdvance} style={buttonSuccess}>
                     <Lock size={16} /> Lock Votes & Score
                   </button>
@@ -1210,6 +1245,9 @@ function AdminPageInner() {
             </button>
             <button onClick={() => navigator.clipboard.writeText(resultsUrl)} style={{ ...buttonPrimary, backgroundColor: '#8b5cf6' }}>
               Copy Results Link
+            </button>
+            <button onClick={handleResetUserFeatures} style={buttonDanger}>
+              Reset User Features
             </button>
           </div>
 
