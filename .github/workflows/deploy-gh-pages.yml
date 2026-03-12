@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [PCTE-Business-Value-Voting-Tool, v5, feature/signal-strength, v4, WSJF-v3, main]
+    branches: [PCTE-Business-Value-Voting-Tool]
   workflow_dispatch:
 
 permissions:
@@ -11,7 +11,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: "pages-${{ github.ref }}"
+  group: "pages"
   cancel-in-progress: true
 
 jobs:
