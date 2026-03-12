@@ -67,7 +67,7 @@ function VotePageInner() {
   const sortedFeatures = useMemo(() => {
     // Architecture features first, then user-facing, preserving original order within each group
     return Object.values(features).sort((a, b) => {
-      const typeOrder = (f: typeof a) => f.featureType === 'architecture' ? 0 : 1;
+      const typeOrder = (f: typeof a) => (f.featureType || 'user') === 'architecture' ? 0 : 1;
       const typeDiff = typeOrder(a) - typeOrder(b);
       if (typeDiff !== 0) return typeDiff;
       return a.order - b.order;
@@ -296,7 +296,7 @@ function VotePageInner() {
   // ===========================
 
   if (sessionMeta?.status === 'voting' && currentFeature) {
-    const isArchFeature = currentFeature.featureType === 'architecture';
+    const isArchFeature = (currentFeature.featureType || 'user') === 'architecture';
     const progress = `${sessionMeta.currentFeatureIndex + 1} / ${sortedFeatures.length}`;
 
     // Architecture features: voters just wait while admin scores

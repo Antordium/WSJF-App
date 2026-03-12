@@ -86,7 +86,7 @@ function AdminPageInner() {
   const sortedFeatures = useMemo(() => {
     // Architecture features first, then user-facing, preserving original order within each group
     return Object.values(features).sort((a, b) => {
-      const typeOrder = (f: Feature) => f.featureType === 'architecture' ? 0 : 1;
+      const typeOrder = (f: Feature) => (f.featureType || 'user') === 'architecture' ? 0 : 1;
       const typeDiff = typeOrder(a) - typeOrder(b);
       if (typeDiff !== 0) return typeDiff;
       return a.order - b.order;
@@ -97,6 +97,16 @@ function AdminPageInner() {
     if (!sessionMeta) return null;
     return sortedFeatures[sessionMeta.currentFeatureIndex] || null;
   }, [sortedFeatures, sessionMeta]);
+
+  // Initialize architecture feature scores when current feature changes
+  useEffect(() => {
+    if (currentFeature && (currentFeature.featureType || 'user') === 'architecture' && !featureScores[currentFeature.id]) {
+      setFeatureScores(prev => ({
+        ...prev,
+        [currentFeature.id]: { tc: 3, rr: 3, cr: 1, sprints: 1 },
+      }));
+    }
+  }, [currentFeature]);
 
   // ===========================
   // REAL-TIME LISTENERS
@@ -234,7 +244,7 @@ function AdminPageInner() {
     // Ensure all features have scores saved
     for (const feature of sortedFeatures) {
       const fScores = featureScores[feature.id] || { tc: 3, rr: 3, cr: 1, sprints: 1 };
-      if (feature.featureType === 'architecture') {
+      if ((feature.featureType || 'user') === 'architecture') {
         await updateFeatureScores(sessionId, feature.id, fScores.rr, fScores.cr, fScores.sprints, fScores.tc);
       } else {
         await updateFeatureScores(sessionId, feature.id, fScores.rr, fScores.cr, fScores.sprints);
@@ -250,7 +260,7 @@ function AdminPageInner() {
       const fScores = featureScores[feature.id] || { tc: 3, rr: 3, cr: 1, sprints: 1 };
       const featureWithScores = {
         ...feature,
-        tc: feature.featureType === 'architecture' ? fScores.tc : feature.tc,
+        tc: (feature.featureType || 'user') === 'architecture' ? fScores.tc : feature.tc,
         rr: fScores.rr,
         cr: fScores.cr,
         sprints: fScores.sprints,
@@ -291,7 +301,7 @@ function AdminPageInner() {
       const scores = featureScores[feature.id] || { tc: 3, rr: 3, cr: 1, sprints: 1 };
       const featureWithScores = {
         ...feature,
-        tc: feature.featureType === 'architecture' ? scores.tc : feature.tc,
+        tc: (feature.featureType || 'user') === 'architecture' ? scores.tc : feature.tc,
         rr: scores.rr,
         cr: scores.cr,
         sprints: scores.sprints,
@@ -368,7 +378,7 @@ function AdminPageInner() {
         };
 
         // Match type first (most specific) so "Feature Type" doesn't get grabbed by name
-        const typeCol = findCol(['type', 'category', 'kind']);
+        const typeCol = findCol(['type', 'category', 'arch', 'kind']);
         const jiraCol = findCol(['jira', 'ticket', 'issue', 'key']);
         const teamCol = findCol(['team', 'developer', 'dev', 'squad', 'group']);
         const problemCol = findCol(['description', 'desc', 'problem', 'summary', 'detail']);
@@ -378,6 +388,15 @@ function AdminPageInner() {
           alert(`Could not find a "Feature Name" column.\n\nDetected columns: ${headers.join(', ')}\n\nExpected a column header containing one of: feature, name, title, capability, epic, story`);
           return;
         }
+
+        // Show column mapping so user can verify
+        const mapping = [
+          `Feature Name ← "${nameCol}"`,
+          typeCol ? `Type ← "${typeCol}"` : 'Type ← (not detected)',
+          jiraCol ? `Jira ← "${jiraCol}"` : 'Jira ← (not detected)',
+          teamCol ? `Dev Team ← "${teamCol}"` : 'Dev Team ← (not detected)',
+          problemCol ? `Description ← "${problemCol}"` : 'Description ← (not detected)',
+        ].join('\n');
 
         const parsed = rows
           .map(row => {
@@ -404,8 +423,8 @@ function AdminPageInner() {
           return [...existing, ...parsed];
         });
 
-        const archCount = parsed.filter(f => f.featureType === 'architecture').length;
-        alert(`Imported ${parsed.length} features from "${file.name}"${archCount > 0 ? `\n(${archCount} architecture, ${parsed.length - archCount} user-facing)` : ''}${jiraCol ? '' : '\n(No Jira column detected)'}${teamCol ? '' : '\n(No Team column detected)'}${typeCol ? '' : '\n(No Type column detected — all set to User-Facing)'}`);
+        const archCount = parsed.filter(f => (f.featureType || 'user') === 'architecture').length;
+        alert(`Imported ${parsed.length} features from "${file.name}"${archCount > 0 ? `\n(${archCount} architecture, ${parsed.length - archCount} user-facing)` : ''}\n\nColumn mapping:\n${mapping}\n\nAll columns in file: ${headers.join(', ')}`);
       } catch (err) {
         console.error('File parse error:', err);
         alert('Failed to parse file. Ensure it is a valid CSV or Excel file.');
@@ -547,11 +566,11 @@ function AdminPageInner() {
                         style={{
                           padding: '3px 10px', borderRadius: '12px', border: 'none', cursor: 'pointer',
                           fontSize: '11px', fontWeight: '600', letterSpacing: '0.03em',
-                          backgroundColor: fi.featureType === 'architecture' ? '#7c3aed' : '#3b82f6',
+                          backgroundColor: (fi.featureType || 'user') === 'architecture' ? '#7c3aed' : '#3b82f6',
                           color: 'white',
                         }}
                       >
-                        {fi.featureType === 'architecture' ? 'ARCH' : 'USER'}
+                        {(fi.featureType || 'user') === 'architecture' ? 'ARCH' : 'USER'}
                       </button>
                     </div>
                     {featureInputs.length > 1 && (
@@ -671,10 +690,10 @@ function AdminPageInner() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                   <span style={{
                     padding: '2px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: '600',
-                    backgroundColor: f.featureType === 'architecture' ? '#7c3aed' : '#3b82f6',
+                    backgroundColor: (f.featureType || 'user') === 'architecture' ? '#7c3aed' : '#3b82f6',
                     color: 'white',
                   }}>
-                    {f.featureType === 'architecture' ? 'ARCH' : 'USER'}
+                    {(f.featureType || 'user') === 'architecture' ? 'ARCH' : 'USER'}
                   </span>
                   <span style={{ color: theme.textPrimary, fontWeight: '500' }}>{f.name}</span>
                   {f.jiraNumber && <span style={{ color: theme.textMuted, fontSize: '12px' }}>({f.jiraNumber})</span>}
@@ -697,15 +716,7 @@ function AdminPageInner() {
     const currentVotes = currentFeature ? (allVotes[currentFeature.id] || {}) : {};
     const votedCount = Object.keys(currentVotes).length;
     const progress = sessionMeta ? `${sessionMeta.currentFeatureIndex + 1} / ${sortedFeatures.length}` : '';
-    const isArchFeature = currentFeature?.featureType === 'architecture';
-
-    // Initialize architecture feature scores when it becomes current
-    if (isArchFeature && currentFeature && !featureScores[currentFeature.id]) {
-      setFeatureScores(prev => ({
-        ...prev,
-        [currentFeature.id]: { tc: 3, rr: 3, cr: 1, sprints: 1 },
-      }));
-    }
+    const isArchFeature = (currentFeature?.featureType || 'user') === 'architecture';
 
     return (
       <div style={{ minHeight: '100vh', backgroundColor: theme.background, color: theme.textPrimary, fontFamily: 'ui-sans-serif, system-ui, sans-serif' }}>
@@ -1217,10 +1228,10 @@ function AdminPageInner() {
                       <td style={{ padding: '12px 8px', textAlign: 'center' }}>
                         <span style={{
                           padding: '2px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: '600',
-                          backgroundColor: r.featureType === 'architecture' ? '#7c3aed' : '#3b82f6',
+                          backgroundColor: (r.featureType || 'user') === 'architecture' ? '#7c3aed' : '#3b82f6',
                           color: 'white',
                         }}>
-                          {r.featureType === 'architecture' ? 'ARCH' : 'USER'}
+                          {(r.featureType || 'user') === 'architecture' ? 'ARCH' : 'USER'}
                         </span>
                       </td>
                       <td style={{ padding: '12px 8px', textAlign: 'center', color: theme.textSecondary, fontSize: '13px' }}>{r.jiraNumber}</td>

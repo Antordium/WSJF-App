@@ -135,7 +135,7 @@ export function calculateFeatureWSJF(
   voterProfiles: Record<string, VoterProfile>,
   weights: Weights,
 ): FeatureResult {
-  const isArchitecture = feature.featureType === 'architecture';
+  const isArchitecture = (feature.featureType || 'user') === 'architecture';
 
   const noSignal: SignalStrengthResult = {
     adjustedScore: 0,
