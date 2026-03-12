@@ -241,6 +241,101 @@ export async function resetUserFeatureVoting(
 }
 
 // ===========================
+// SESSION MERGE
+// ===========================
+
+export async function mergeSessions(
+  archSessionId: string,
+  userSessionId: string,
+  title: string,
+  adminPin: string,
+): Promise<string> {
+  const db = getDb();
+
+  // Read both sessions
+  const archSession = await getSession(archSessionId);
+  const userSession = await getSession(userSessionId);
+
+  if (!archSession || !userSession) {
+    throw new Error('One or both sessions not found.');
+  }
+
+  const archFeatures: Record<string, Feature> = archSession.features || {};
+  const userFeatures: Record<string, Feature> = userSession.features || {};
+
+  // Filter: architecture features from session 1, user features from session 2
+  const archOnly = Object.entries(archFeatures)
+    .filter(([, f]) => (f.featureType || 'user') === 'architecture');
+  const userOnly = Object.entries(userFeatures)
+    .filter(([, f]) => (f.featureType || 'user') === 'user');
+
+  // Build merged features with new IDs and re-ordered (arch first, then user)
+  const sessionsRef = ref(db, 'sessions');
+  const newSessionRef = push(sessionsRef);
+  const newSessionId = newSessionRef.key!;
+
+  const mergedFeatures: Record<string, Feature> = {};
+  const oldToNewFeatureId: Record<string, string> = {};
+  let order = 0;
+
+  // Architecture features first
+  for (const [oldId, f] of archOnly) {
+    const newFeatureRef = push(ref(db, `sessions/${newSessionId}/features`));
+    const newId = newFeatureRef.key!;
+    oldToNewFeatureId[oldId] = newId;
+    mergedFeatures[newId] = {
+      ...f,
+      id: newId,
+      order: order++,
+      votingOpen: false,
+    };
+  }
+
+  // User features next
+  for (const [oldId, f] of userOnly) {
+    const newFeatureRef = push(ref(db, `sessions/${newSessionId}/features`));
+    const newId = newFeatureRef.key!;
+    oldToNewFeatureId[oldId] = newId;
+    mergedFeatures[newId] = {
+      ...f,
+      id: newId,
+      order: order++,
+      votingOpen: false,
+    };
+  }
+
+  // Voters from user session only
+  const mergedVoters: Record<string, VoterProfile> = userSession.voters || {};
+
+  // Votes: only user-feature votes from user session (architecture has no voter votes)
+  const userVotes: Record<string, Record<string, FeatureVote>> = userSession.votes || {};
+  const mergedVotes: Record<string, Record<string, FeatureVote>> = {};
+  for (const [oldFeatureId, votes] of Object.entries(userVotes)) {
+    const newFeatureId = oldToNewFeatureId[oldFeatureId];
+    if (newFeatureId) {
+      mergedVotes[newFeatureId] = votes as Record<string, FeatureVote>;
+    }
+  }
+
+  const meta: SessionMeta = {
+    title,
+    status: 'results',
+    currentFeatureIndex: order - 1,
+    createdAt: Date.now(),
+    adminPin,
+  };
+
+  await set(newSessionRef, {
+    meta,
+    features: mergedFeatures,
+    voters: mergedVoters,
+    votes: mergedVotes,
+  });
+
+  return newSessionId;
+}
+
+// ===========================
 // RESULTS
 // ===========================
 
