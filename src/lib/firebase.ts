@@ -51,7 +51,7 @@ function getDb() {
 
 export async function createSession(
   title: string,
-  features: Omit<Feature, 'id' | 'order' | 'votingOpen' | 'rr' | 'cr' | 'sprints'>[],
+  features: Omit<Feature, 'id' | 'order' | 'votingOpen' | 'tc' | 'rr' | 'cr' | 'sprints'>[],
   adminPin: string,
 ): Promise<string> {
   const db = getDb();
@@ -80,6 +80,7 @@ export async function createSession(
       featureType: f.featureType || 'user',
       order: index,
       votingOpen: false,
+      tc: null,
       rr: null,
       cr: null,
       sprints: null,
@@ -162,13 +163,13 @@ export async function submitVote(
   sessionId: string,
   featureId: string,
   voterId: string,
-  uv: number,
+  bv: number,
   tc: number,
 ) {
   const db = getDb();
   const voteRef = ref(db, `sessions/${sessionId}/votes/${featureId}/${voterId}`);
   const featureVote: FeatureVote = {
-    uv,
+    bv,
     tc,
     timestamp: Date.now(),
   };
@@ -185,13 +186,12 @@ export async function updateFeatureScores(
   rr: number,
   cr: number,
   sprints: number,
+  tc?: number,
 ) {
   const db = getDb();
-  await update(ref(db, `sessions/${sessionId}/features/${featureId}`), {
-    rr,
-    cr,
-    sprints,
-  });
+  const updates: Record<string, number> = { rr, cr, sprints };
+  if (tc !== undefined) updates.tc = tc;
+  await update(ref(db, `sessions/${sessionId}/features/${featureId}`), updates);
 }
 
 // ===========================

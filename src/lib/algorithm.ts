@@ -51,7 +51,7 @@ export function calculateConsensusBonus(votes: Vote[]): number {
 }
 
 /**
- * Generic Signal Strength calculation — works for both UV and TC votes.
+ * Generic Signal Strength calculation — works for both BV and TC votes.
  */
 export function calculateSignalStrength(votes: Vote[]): SignalStrengthResult {
   if (votes.length === 0) {
@@ -101,7 +101,7 @@ export function calculateSignalStrength(votes: Vote[]): SignalStrengthResult {
 
 /**
  * Convert Firebase votes + voter profiles into Vote[] for Signal Strength calculation.
- * Used for both UV and TC — pass the score extractor.
+ * Used for both BV and TC — pass the score extractor.
  */
 export function buildVotesForSignalStrength(
   featureVotes: Record<string, FeatureVote>,
@@ -126,6 +126,8 @@ export function buildVotesForSignalStrength(
 
 /**
  * Calculate full WSJF result for a single feature.
+ * Architecture features: BV=1 fixed, TC from admin (feature.tc), no voter signal strength.
+ * User-facing features: BV and TC from voter signal strength algorithm.
  */
 export function calculateFeatureWSJF(
   feature: Feature,
@@ -135,30 +137,45 @@ export function calculateFeatureWSJF(
 ): FeatureResult {
   const isArchitecture = feature.featureType === 'architecture';
 
-  const uvVotes = buildVotesForSignalStrength(featureVotes, voterProfiles, fv => fv.uv);
-  const tcVotes = buildVotesForSignalStrength(featureVotes, voterProfiles, fv => fv.tc);
+  const noSignal: SignalStrengthResult = {
+    adjustedScore: 0,
+    signalStrength: 1.0,
+    breakdown: { weightedAverage: 0, volumeFactor: 1.0, serviceSpreadBonus: 1.0, personaSpreadBonus: 1.0, consensusBonus: 1.0, uncappedSignalStrength: 1.0 },
+  };
 
-  // Architecture features: UV is fixed at 1.0 (no signal strength applied)
-  const uvResult = isArchitecture
-    ? { adjustedScore: 1.0, signalStrength: 1.0, breakdown: { weightedAverage: 1.0, volumeFactor: 1.0, serviceSpreadBonus: 1.0, personaSpreadBonus: 1.0, consensusBonus: 1.0, uncappedSignalStrength: 1.0 } }
-    : calculateSignalStrength(uvVotes);
-  const tcResult = calculateSignalStrength(tcVotes);
+  // Architecture: BV fixed at 1.0, TC from admin slider (no voters)
+  // User-facing: BV and TC from voter signal strength
+  let bvResult: SignalStrengthResult;
+  let tcResult: SignalStrengthResult;
+  let bvVotes: Vote[] = [];
+  let tcVotes: Vote[] = [];
+
+  if (isArchitecture) {
+    bvResult = { ...noSignal, adjustedScore: 1.0, breakdown: { ...noSignal.breakdown, weightedAverage: 1.0 } };
+    const adminTC = feature.tc ?? 3;
+    tcResult = { ...noSignal, adjustedScore: adminTC, breakdown: { ...noSignal.breakdown, weightedAverage: adminTC } };
+  } else {
+    bvVotes = buildVotesForSignalStrength(featureVotes, voterProfiles, fv => fv.bv);
+    tcVotes = buildVotesForSignalStrength(featureVotes, voterProfiles, fv => fv.tc);
+    bvResult = calculateSignalStrength(bvVotes);
+    tcResult = calculateSignalStrength(tcVotes);
+  }
 
   const rr = feature.rr ?? 3;
   const cr = feature.cr ?? 1;
   const sprints = feature.sprints ?? 1;
 
   const costOfDelay =
-    uvResult.adjustedScore * weights.uv +
+    bvResult.adjustedScore * weights.bv +
     tcResult.adjustedScore * weights.tc +
     rr * weights.rr +
     cr * weights.cr;
 
   const wsjf = costOfDelay / (sprints > 0 ? sprints : 1);
 
-  const uniqueServices = new Set(uvVotes.map(v => v.service)).size;
-  const uniquePersonas = new Set(uvVotes.map(v => v.persona)).size;
-  const rawUVAvg = uvVotes.length > 0 ? uvVotes.reduce((s, v) => s + v.score, 0) / uvVotes.length : 0;
+  const uniqueServices = new Set(bvVotes.map(v => v.service)).size;
+  const uniquePersonas = new Set(bvVotes.map(v => v.persona)).size;
+  const rawBVAvg = bvVotes.length > 0 ? bvVotes.reduce((s, v) => s + v.score, 0) / bvVotes.length : 0;
   const rawTCAvg = tcVotes.length > 0 ? tcVotes.reduce((s, v) => s + v.score, 0) / tcVotes.length : 0;
 
   return {
@@ -168,13 +185,13 @@ export function calculateFeatureWSJF(
     developerTeam: feature.developerTeam,
     problemSolved: feature.problemSolved,
     featureType: feature.featureType || 'user',
-    voteCount: Object.keys(featureVotes).length,
+    voteCount: isArchitecture ? 0 : Object.keys(featureVotes).length,
     uniqueServices,
     uniquePersonas,
-    rawUVAvg: isArchitecture ? 1.0 : rawUVAvg,
-    uvSignalStrength: uvResult.signalStrength,
-    adjustedUV: uvResult.adjustedScore,
-    rawTCAvg,
+    rawBVAvg: isArchitecture ? 1.0 : rawBVAvg,
+    bvSignalStrength: bvResult.signalStrength,
+    adjustedBV: bvResult.adjustedScore,
+    rawTCAvg: isArchitecture ? (feature.tc ?? 3) : rawTCAvg,
     tcSignalStrength: tcResult.signalStrength,
     adjustedTC: tcResult.adjustedScore,
     rr,

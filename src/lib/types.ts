@@ -61,7 +61,7 @@ export interface Initiative {
 }
 
 export interface Weights {
-  uv: number;
+  bv: number;
   tc: number;
   rr: number;
   cr: number;
@@ -94,13 +94,14 @@ export interface Feature {
   featureType: FeatureType;
   order: number;
   votingOpen: boolean;
+  tc: number | null;
   rr: number | null;
   cr: number | null;
   sprints: number | null;
 }
 
 export interface FeatureVote {
-  uv: number;
+  bv: number;
   tc: number;
   timestamp: number;
 }
@@ -114,9 +115,9 @@ export interface FeatureResult {
   voteCount: number;
   uniqueServices: number;
   uniquePersonas: number;
-  rawUVAvg: number;
-  uvSignalStrength: number;
-  adjustedUV: number;
+  rawBVAvg: number;
+  bvSignalStrength: number;
+  adjustedBV: number;
   rawTCAvg: number;
   tcSignalStrength: number;
   adjustedTC: number;

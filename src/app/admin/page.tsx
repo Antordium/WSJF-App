@@ -60,7 +60,7 @@ function AdminPageInner() {
   const [voters, setVoters] = useState<Record<string, VoterProfile>>({});
   const [allVotes, setAllVotes] = useState<Record<string, Record<string, FeatureVote>>>({});
   const [results, setResults] = useState<FeatureResult[]>([]);
-  const [weights, setWeights] = useState<Weights>({ uv: 1, tc: 1, rr: 1, cr: 1 });
+  const [weights, setWeights] = useState<Weights>({ bv: 1, tc: 1, rr: 1, cr: 1 });
   const [isExporting, setIsExporting] = useState(false);
 
   // Creation form state
@@ -70,8 +70,8 @@ function AdminPageInner() {
     name: string; jiraNumber: string; problemSolved: string; developerTeam: string; featureType: FeatureType;
   }>>([{ name: '', jiraNumber: '', problemSolved: '', developerTeam: '', featureType: 'user' }]);
 
-  // Admin score entry state
-  const [featureScores, setFeatureScores] = useState<Record<string, { rr: number; cr: number; sprints: number }>>({});
+  // Admin score entry state — tc included for architecture features
+  const [featureScores, setFeatureScores] = useState<Record<string, { tc: number; rr: number; cr: number; sprints: number }>>({});
   // Inline scoring: after locking votes, admin scores RR/CR/Sprints before advancing
   const [inlineScoring, setInlineScoring] = useState<string | null>(null); // featureId being scored, or null
 
@@ -84,7 +84,13 @@ function AdminPageInner() {
   // ===========================
 
   const sortedFeatures = useMemo(() => {
-    return Object.values(features).sort((a, b) => a.order - b.order);
+    // Architecture features first, then user-facing, preserving original order within each group
+    return Object.values(features).sort((a, b) => {
+      const typeOrder = (f: Feature) => f.featureType === 'architecture' ? 0 : 1;
+      const typeDiff = typeOrder(a) - typeOrder(b);
+      if (typeDiff !== 0) return typeDiff;
+      return a.order - b.order;
+    });
   }, [features]);
 
   const currentFeature = useMemo(() => {
@@ -159,12 +165,32 @@ function AdminPageInner() {
   const handleStartVoting = async () => {
     if (!sessionId) return;
     await setSessionStatus(sessionId, 'voting');
-    // Open first feature for voting
+    // Open first feature for voting (architecture features don't need votingOpen but set it for consistency)
     if (sortedFeatures[0]) {
       await setFeatureVotingOpen(sessionId, sortedFeatures[0].id, true);
     }
   };
 
+  // --- Architecture feature: admin saves all scores and advances ---
+  const handleArchitectureSave = async () => {
+    if (!sessionId || !sessionMeta || !currentFeature) return;
+    const scores = featureScores[currentFeature.id] || { tc: 3, rr: 3, cr: 1, sprints: 1 };
+
+    // Close feature and save scores (including admin TC)
+    await setFeatureVotingOpen(sessionId, currentFeature.id, false);
+    await updateFeatureScores(sessionId, currentFeature.id, scores.rr, scores.cr, scores.sprints, scores.tc);
+
+    const nextIndex = sessionMeta.currentFeatureIndex + 1;
+    if (nextIndex < sortedFeatures.length) {
+      await advanceFeature(sessionId, nextIndex);
+      await setFeatureVotingOpen(sessionId, sortedFeatures[nextIndex].id, true);
+    } else {
+      // All features done — calculate and show results
+      await finalizeResults();
+    }
+  };
+
+  // --- User-facing feature: lock votes, show inline scoring ---
   const handleLockAndAdvance = async () => {
     if (!sessionId || !sessionMeta || !currentFeature) return;
     // Close current feature voting
@@ -173,7 +199,7 @@ function AdminPageInner() {
     // Initialize default scores for this feature if not already set
     setFeatureScores(prev => ({
       ...prev,
-      [currentFeature.id]: prev[currentFeature.id] || { rr: currentFeature.rr ?? 3, cr: currentFeature.cr ?? 1, sprints: currentFeature.sprints ?? 1 },
+      [currentFeature.id]: prev[currentFeature.id] || { tc: 3, rr: currentFeature.rr ?? 3, cr: currentFeature.cr ?? 1, sprints: currentFeature.sprints ?? 1 },
     }));
 
     // Show inline scoring form — admin enters RR/CR/Sprints while voters wait
@@ -183,7 +209,7 @@ function AdminPageInner() {
   // After admin finishes inline scoring, save and advance to next feature (or results)
   const handleInlineScoringDone = async () => {
     if (!sessionId || !sessionMeta || !inlineScoring) return;
-    const scores = featureScores[inlineScoring] || { rr: 3, cr: 1, sprints: 1 };
+    const scores = featureScores[inlineScoring] || { tc: 3, rr: 3, cr: 1, sprints: 1 };
 
     // Save this feature's scores to Firebase immediately
     await updateFeatureScores(sessionId, inlineScoring, scores.rr, scores.cr, scores.sprints);
@@ -196,42 +222,23 @@ function AdminPageInner() {
       await advanceFeature(sessionId, nextIndex);
       await setFeatureVotingOpen(sessionId, sortedFeatures[nextIndex].id, true);
     } else {
-      // All features voted AND scored — skip scoring phase, go straight to results
-      // Ensure all features have scores saved
-      for (const feature of sortedFeatures) {
-        const fScores = featureScores[feature.id] || { rr: 3, cr: 1, sprints: 1 };
-        await updateFeatureScores(sessionId, feature.id, fScores.rr, fScores.cr, fScores.sprints);
-      }
-
-      // Calculate WSJF for all features
-      const resultsMap: Record<string, FeatureResult> = {};
-      const resultsList: FeatureResult[] = [];
-
-      for (const feature of sortedFeatures) {
-        const fVotes = allVotes[feature.id] || {};
-        const fScores = featureScores[feature.id] || { rr: 3, cr: 1, sprints: 1 };
-        const featureWithScores = { ...feature, rr: fScores.rr, cr: fScores.cr, sprints: fScores.sprints };
-        const result = calculateFeatureWSJF(featureWithScores, fVotes, voters, weights);
-        resultsMap[feature.id] = result;
-        resultsList.push(result);
-      }
-
-      resultsList.sort((a, b) => b.wsjf - a.wsjf);
-      setResults(resultsList);
-
-      await saveResults(sessionId, resultsMap);
-      await setSessionStatus(sessionId, 'results');
-
-      setActiveTeamTab('All');
+      // All features voted AND scored — go straight to results
+      await finalizeResults();
     }
   };
 
-  const handleSaveScoresAndCalculate = async () => {
+  // Shared: calculate WSJF for all features and transition to results
+  const finalizeResults = async () => {
     if (!sessionId) return;
 
-    // Save all admin scores to Firebase
-    for (const [fId, scores] of Object.entries(featureScores)) {
-      await updateFeatureScores(sessionId, fId, scores.rr, scores.cr, scores.sprints);
+    // Ensure all features have scores saved
+    for (const feature of sortedFeatures) {
+      const fScores = featureScores[feature.id] || { tc: 3, rr: 3, cr: 1, sprints: 1 };
+      if (feature.featureType === 'architecture') {
+        await updateFeatureScores(sessionId, feature.id, fScores.rr, fScores.cr, fScores.sprints, fScores.tc);
+      } else {
+        await updateFeatureScores(sessionId, feature.id, fScores.rr, fScores.cr, fScores.sprints);
+      }
     }
 
     // Calculate WSJF for all features
@@ -240,8 +247,55 @@ function AdminPageInner() {
 
     for (const feature of sortedFeatures) {
       const fVotes = allVotes[feature.id] || {};
-      const scores = featureScores[feature.id] || { rr: 3, cr: 1, sprints: 1 };
-      const featureWithScores = { ...feature, rr: scores.rr, cr: scores.cr, sprints: scores.sprints };
+      const fScores = featureScores[feature.id] || { tc: 3, rr: 3, cr: 1, sprints: 1 };
+      const featureWithScores = {
+        ...feature,
+        tc: feature.featureType === 'architecture' ? fScores.tc : feature.tc,
+        rr: fScores.rr,
+        cr: fScores.cr,
+        sprints: fScores.sprints,
+      };
+      const result = calculateFeatureWSJF(featureWithScores, fVotes, voters, weights);
+      resultsMap[feature.id] = result;
+      resultsList.push(result);
+    }
+
+    resultsList.sort((a, b) => b.wsjf - a.wsjf);
+    setResults(resultsList);
+
+    await saveResults(sessionId, resultsMap);
+    await setSessionStatus(sessionId, 'results');
+
+    setActiveTeamTab('All');
+  };
+
+  const handleSaveScoresAndCalculate = async () => {
+    if (!sessionId) return;
+
+    // Save all admin scores to Firebase
+    for (const [fId, scores] of Object.entries(featureScores)) {
+      const feature = sortedFeatures.find(f => f.id === fId);
+      if (feature?.featureType === 'architecture') {
+        await updateFeatureScores(sessionId, fId, scores.rr, scores.cr, scores.sprints, scores.tc);
+      } else {
+        await updateFeatureScores(sessionId, fId, scores.rr, scores.cr, scores.sprints);
+      }
+    }
+
+    // Calculate WSJF for all features
+    const resultsMap: Record<string, FeatureResult> = {};
+    const resultsList: FeatureResult[] = [];
+
+    for (const feature of sortedFeatures) {
+      const fVotes = allVotes[feature.id] || {};
+      const scores = featureScores[feature.id] || { tc: 3, rr: 3, cr: 1, sprints: 1 };
+      const featureWithScores = {
+        ...feature,
+        tc: feature.featureType === 'architecture' ? scores.tc : feature.tc,
+        rr: scores.rr,
+        cr: scores.cr,
+        sprints: scores.sprints,
+      };
       const result = calculateFeatureWSJF(featureWithScores, fVotes, voters, weights);
       resultsMap[feature.id] = result;
       resultsList.push(result);
@@ -254,9 +308,7 @@ function AdminPageInner() {
     await saveResults(sessionId, resultsMap);
     await setSessionStatus(sessionId, 'results');
 
-    // Set initial team tab
-    const teams = [...new Set(resultsList.map(r => r.developerTeam))].sort();
-    if (teams.length > 0) setActiveTeamTab(teams[0]);
+    setActiveTeamTab('All');
   };
 
   const handleExportCSV = () => {
@@ -306,18 +358,24 @@ function AdminPageInner() {
         }
 
         // Map columns flexibly — match by header name (case-insensitive, partial match)
+        // Each column can only be claimed once; order matters (most specific first)
         const headers = Object.keys(rows[0]);
-        const findCol = (keywords: string[]) =>
-          headers.find(h => keywords.some(k => h.toLowerCase().includes(k.toLowerCase())));
+        const claimed = new Set<string>();
+        const findCol = (keywords: string[]) => {
+          const match = headers.find(h => !claimed.has(h) && keywords.some(k => h.toLowerCase().includes(k.toLowerCase())));
+          if (match) claimed.add(match);
+          return match;
+        };
 
-        const nameCol = findCol(['feature', 'name', 'title', 'capability', 'epic', 'story']);
-        const jiraCol = findCol(['jira', 'ticket', 'issue', 'key', 'id']);
+        // Match type first (most specific) so "Feature Type" doesn't get grabbed by name
+        const typeCol = findCol(['type', 'category', 'kind']);
+        const jiraCol = findCol(['jira', 'ticket', 'issue', 'key']);
         const teamCol = findCol(['team', 'developer', 'dev', 'squad', 'group']);
-        const problemCol = findCol(['problem', 'description', 'desc', 'summary', 'detail']);
-        const typeCol = findCol(['type', 'category', 'arch', 'kind']);
+        const problemCol = findCol(['description', 'desc', 'problem', 'summary', 'detail']);
+        const nameCol = findCol(['feature', 'name', 'title', 'capability', 'epic', 'story']);
 
         if (!nameCol) {
-          alert(`Could not find a "Feature Name" column.\n\nDetected columns: ${headers.join(', ')}\n\nExpected a column containing one of: feature, name, title, capability, epic, story`);
+          alert(`Could not find a "Feature Name" column.\n\nDetected columns: ${headers.join(', ')}\n\nExpected a column header containing one of: feature, name, title, capability, epic, story`);
           return;
         }
 
@@ -516,8 +574,8 @@ function AdminPageInner() {
                       <input value={fi.developerTeam} onChange={e => updateFeatureInput(index, 'developerTeam', e.target.value)} placeholder="Team Alpha" style={inputStyle} />
                     </div>
                     <div style={{ gridColumn: '1 / -1' }}>
-                      <label style={{ display: 'block', fontSize: '12px', color: theme.textMuted, marginBottom: '4px' }}>Problem Solved</label>
-                      <input value={fi.problemSolved} onChange={e => updateFeatureInput(index, 'problemSolved', e.target.value)} placeholder="Describe the problem this feature solves..." style={inputStyle} />
+                      <label style={{ display: 'block', fontSize: '12px', color: theme.textMuted, marginBottom: '4px' }}>Description</label>
+                      <input value={fi.problemSolved} onChange={e => updateFeatureInput(index, 'problemSolved', e.target.value)} placeholder="Describe what this feature does..." style={inputStyle} />
                     </div>
                   </div>
                 </div>
@@ -540,6 +598,8 @@ function AdminPageInner() {
   // ===========================
 
   if (sessionMeta?.status === 'lobby') {
+    const hasUserFeatures = sortedFeatures.some(f => f.featureType !== 'architecture');
+
     return (
       <div style={{ minHeight: '100vh', backgroundColor: theme.background, color: theme.textPrimary, fontFamily: 'ui-sans-serif, system-ui, sans-serif' }}>
         <div style={{ maxWidth: '900px', margin: '0 auto', padding: '24px' }}>
@@ -571,7 +631,7 @@ function AdminPageInner() {
                 <Users size={20} style={{ marginRight: '8px', verticalAlign: 'middle' }} />
                 Voters Joined: {Object.keys(voters).length}
               </h2>
-              <button onClick={handleStartVoting} disabled={Object.keys(voters).length === 0} style={{ ...buttonSuccess, opacity: Object.keys(voters).length === 0 ? 0.5 : 1, cursor: Object.keys(voters).length === 0 ? 'not-allowed' : 'pointer' }}>
+              <button onClick={handleStartVoting} disabled={!hasUserFeatures && Object.keys(voters).length === 0} style={{ ...buttonSuccess, opacity: (!hasUserFeatures && Object.keys(voters).length === 0) ? 0.5 : 1, cursor: (!hasUserFeatures && Object.keys(voters).length === 0) ? 'not-allowed' : 'pointer' }}>
                 <ArrowRight size={16} /> Start Voting
               </button>
             </div>
@@ -582,7 +642,7 @@ function AdminPageInner() {
                   <thead>
                     <tr style={{ borderBottom: `1px solid ${theme.border}` }}>
                       <th style={{ padding: '8px', textAlign: 'left', color: theme.textMuted, fontWeight: '500' }}>Name</th>
-                      <th style={{ padding: '8px', textAlign: 'left', color: theme.textMuted, fontWeight: '500' }}>Rank</th>
+                      <th style={{ padding: '8px', textAlign: 'left', color: theme.textMuted, fontWeight: '500' }}>Paygrade</th>
                       <th style={{ padding: '8px', textAlign: 'left', color: theme.textMuted, fontWeight: '500' }}>Persona</th>
                       <th style={{ padding: '8px', textAlign: 'left', color: theme.textMuted, fontWeight: '500' }}>Service/Sub-Unified</th>
                     </tr>
@@ -637,6 +697,15 @@ function AdminPageInner() {
     const currentVotes = currentFeature ? (allVotes[currentFeature.id] || {}) : {};
     const votedCount = Object.keys(currentVotes).length;
     const progress = sessionMeta ? `${sessionMeta.currentFeatureIndex + 1} / ${sortedFeatures.length}` : '';
+    const isArchFeature = currentFeature?.featureType === 'architecture';
+
+    // Initialize architecture feature scores when it becomes current
+    if (isArchFeature && currentFeature && !featureScores[currentFeature.id]) {
+      setFeatureScores(prev => ({
+        ...prev,
+        [currentFeature.id]: { tc: 3, rr: 3, cr: 1, sprints: 1 },
+      }));
+    }
 
     return (
       <div style={{ minHeight: '100vh', backgroundColor: theme.background, color: theme.textPrimary, fontFamily: 'ui-sans-serif, system-ui, sans-serif' }}>
@@ -652,70 +721,185 @@ function AdminPageInner() {
           <div style={{ marginBottom: '24px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: theme.textMuted, marginBottom: '6px' }}>
               <span>Feature {progress}</span>
-              <span>{votedCount} / {voterCount} voted</span>
+              {!isArchFeature && <span>{votedCount} / {voterCount} voted</span>}
+              {isArchFeature && <span style={{ color: '#a78bfa' }}>Admin Scoring (Architecture)</span>}
             </div>
             <div style={{ height: '8px', backgroundColor: theme.sliderBg, borderRadius: '4px', overflow: 'hidden' }}>
               <div style={{
                 height: '100%',
                 width: `${((sessionMeta.currentFeatureIndex) / sortedFeatures.length) * 100}%`,
-                backgroundColor: '#3b82f6',
+                backgroundColor: isArchFeature ? '#7c3aed' : '#3b82f6',
                 borderRadius: '4px',
                 transition: 'width 300ms ease',
               }} />
             </div>
           </div>
 
-          {/* Current feature */}
-          {currentFeature && !inlineScoring && (
-            <div style={cardStyle}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
-                    <h2 style={{ fontSize: '24px', fontWeight: '700', color: theme.textPrimary, margin: 0 }}>{currentFeature.name}</h2>
-                    <span style={{
-                      padding: '3px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: '600',
-                      backgroundColor: currentFeature.featureType === 'architecture' ? '#7c3aed' : '#3b82f6',
-                      color: 'white',
-                    }}>
-                      {currentFeature.featureType === 'architecture' ? 'ARCHITECTURE' : 'USER-FACING'}
-                    </span>
+          {/* ============ ARCHITECTURE FEATURE: Admin sliders (no voters) ============ */}
+          {currentFeature && isArchFeature && !inlineScoring && (() => {
+            const scores = featureScores[currentFeature.id] || { tc: 3, rr: 3, cr: 1, sprints: 1 };
+            return (
+              <div style={{ ...cardStyle, border: '2px solid #7c3aed' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+                  <span style={{
+                    padding: '3px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: '600',
+                    backgroundColor: '#7c3aed', color: 'white',
+                  }}>ARCHITECTURE</span>
+                  <span style={{ fontSize: '13px', color: '#a78bfa', fontWeight: '600' }}>Admin-Only Scoring — No Voter Participation</span>
+                </div>
+
+                <h2 style={{ fontSize: '24px', fontWeight: '700', color: theme.textPrimary, margin: '0 0 4px 0' }}>{currentFeature.name}</h2>
+                {currentFeature.jiraNumber && <span style={{ color: '#60a5fa', fontSize: '14px', fontWeight: '500' }}>{currentFeature.jiraNumber}</span>}
+                <span style={{ color: theme.textMuted, fontSize: '13px', marginLeft: '12px' }}>{currentFeature.developerTeam}</span>
+
+                {currentFeature.problemSolved && (
+                  <p style={{ color: theme.textSecondary, fontSize: '14px', padding: '12px', backgroundColor: theme.background, borderRadius: '8px', margin: '12px 0 0 0' }}>
+                    {currentFeature.problemSolved}
+                  </p>
+                )}
+
+                {/* BV fixed at 1 */}
+                <div style={{ marginTop: '20px', marginBottom: '16px', padding: '12px', backgroundColor: 'rgba(124, 58, 237, 0.1)', borderRadius: '8px', border: '1px solid rgba(124, 58, 237, 0.3)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '14px', fontWeight: '600', color: '#a78bfa' }}>Business Value (BV)</span>
+                    <span style={{ fontSize: '20px', fontWeight: 'bold', color: '#a78bfa' }}>1</span>
                   </div>
-                  {currentFeature.jiraNumber && <span style={{ color: '#60a5fa', fontSize: '14px', fontWeight: '500' }}>{currentFeature.jiraNumber}</span>}
-                  <span style={{ color: theme.textMuted, fontSize: '13px', marginLeft: '12px' }}>{currentFeature.developerTeam}</span>
+                  <p style={{ fontSize: '12px', color: theme.textMuted, margin: '4px 0 0 0' }}>Architecture items have a fixed BV of 1.</p>
                 </div>
-              </div>
-              {currentFeature.problemSolved && (
-                <p style={{ color: theme.textSecondary, fontSize: '14px', marginBottom: '16px', padding: '12px', backgroundColor: theme.background, borderRadius: '8px', margin: '0 0 16px 0' }}>
-                  <strong>Problem Solved:</strong> {currentFeature.problemSolved}
-                </p>
-              )}
 
-              {/* Vote count indicator */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '16px', backgroundColor: theme.background, borderRadius: '8px', marginBottom: '16px' }}>
-                <div style={{ textAlign: 'center', flex: 1 }}>
-                  <div style={{ fontSize: '36px', fontWeight: 'bold', color: votedCount === voterCount ? '#10b981' : '#f59e0b' }}>{votedCount}</div>
-                  <div style={{ fontSize: '13px', color: theme.textMuted }}>of {voterCount} voted</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
+                  {/* TC */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', color: theme.textMuted, marginBottom: '4px' }}>Time Criticality (1-5)</label>
+                    <input
+                      type="range" min="1" max="5" value={scores.tc}
+                      onChange={e => setFeatureScores(prev => ({ ...prev, [currentFeature.id]: { ...prev[currentFeature.id], tc: parseInt(e.target.value) } }))}
+                      style={{ width: '100%', height: '6px', backgroundColor: theme.sliderBg, borderRadius: '4px', appearance: 'none', cursor: 'pointer' }}
+                    />
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: '12px', color: theme.textMuted }}>{definitions.tc[scores.tc]}</span>
+                      <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#f59e0b' }}>{scores.tc}</span>
+                    </div>
+                  </div>
+                  {/* RR */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', color: theme.textMuted, marginBottom: '4px' }}>Risk Reduction (1-5)</label>
+                    <input
+                      type="range" min="1" max="5" value={scores.rr}
+                      onChange={e => setFeatureScores(prev => ({ ...prev, [currentFeature.id]: { ...prev[currentFeature.id], rr: parseInt(e.target.value) } }))}
+                      style={{ width: '100%', height: '6px', backgroundColor: theme.sliderBg, borderRadius: '4px', appearance: 'none', cursor: 'pointer' }}
+                    />
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: '12px', color: theme.textMuted }}>{definitions.rr[scores.rr]}</span>
+                      <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#60a5fa' }}>{scores.rr}</span>
+                    </div>
+                  </div>
+                  {/* CR */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', color: theme.textMuted, marginBottom: '4px' }}>Compliance/Regulatory (1-5)</label>
+                    <input
+                      type="range" min="1" max="5" value={scores.cr}
+                      onChange={e => setFeatureScores(prev => ({ ...prev, [currentFeature.id]: { ...prev[currentFeature.id], cr: parseInt(e.target.value) } }))}
+                      style={{ width: '100%', height: '6px', backgroundColor: theme.sliderBg, borderRadius: '4px', appearance: 'none', cursor: 'pointer' }}
+                    />
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: '12px', color: theme.textMuted }}>{definitions.cr[scores.cr]}</span>
+                      <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#60a5fa' }}>{scores.cr}</span>
+                    </div>
+                  </div>
+                  {/* Sprints */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', color: theme.textMuted, marginBottom: '4px' }}>Sprints (1-20)</label>
+                    <input
+                      type="range" min="1" max="20" value={scores.sprints}
+                      onChange={e => setFeatureScores(prev => ({ ...prev, [currentFeature.id]: { ...prev[currentFeature.id], sprints: parseInt(e.target.value) } }))}
+                      style={{ width: '100%', height: '6px', backgroundColor: theme.sliderBg, borderRadius: '4px', appearance: 'none', cursor: 'pointer' }}
+                    />
+                    <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                      <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#60a5fa' }}>{scores.sprints}</span>
+                    </div>
+                  </div>
                 </div>
-                <div style={{ height: '60px', width: '1px', backgroundColor: theme.border }} />
-                <div style={{ textAlign: 'center', flex: 1 }}>
-                  <div style={{ fontSize: '36px', fontWeight: 'bold', color: '#60a5fa' }}>{voterCount - votedCount}</div>
-                  <div style={{ fontSize: '13px', color: theme.textMuted }}>waiting</div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px' }}>
+                  <button onClick={handleArchitectureSave} style={{ ...buttonSuccess, backgroundColor: '#7c3aed' }}>
+                    {sessionMeta.currentFeatureIndex + 1 >= sortedFeatures.length ? (
+                      <><BarChart3 size={16} /> Save & Show Results</>
+                    ) : (
+                      <><ArrowRight size={16} /> Save & Next Feature</>
+                    )}
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* ============ USER-FACING FEATURE: QR + voter participation ============ */}
+          {currentFeature && !isArchFeature && !inlineScoring && (
+            <>
+              {/* QR Code for user-facing features */}
+              <div style={{ ...cardStyle, textAlign: 'center', padding: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '16px', flexWrap: 'wrap' }}>
+                  <div style={{ display: 'inline-block', padding: '12px', backgroundColor: 'white', borderRadius: '10px' }}>
+                    <QRCodeSVG value={voteUrl} size={140} />
+                  </div>
+                  <div style={{ textAlign: 'left' }}>
+                    <p style={{ fontSize: '14px', fontWeight: '600', color: theme.textPrimary, margin: '0 0 4px 0' }}>Scan to Vote</p>
+                    <p style={{ fontSize: '12px', color: theme.textMuted, margin: '0 0 8px 0', wordBreak: 'break-all', maxWidth: '300px' }}>{voteUrl}</p>
+                    <button onClick={() => navigator.clipboard.writeText(voteUrl)} style={{ ...buttonPrimary, padding: '4px 12px', fontSize: '12px' }}>
+                      Copy Link
+                    </button>
+                  </div>
                 </div>
               </div>
 
-              {/* Action button */}
-              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                <button onClick={handleLockAndAdvance} style={buttonSuccess}>
-                  <Lock size={16} /> Lock Votes & Score
-                </button>
+              <div style={cardStyle}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
+                      <h2 style={{ fontSize: '24px', fontWeight: '700', color: theme.textPrimary, margin: 0 }}>{currentFeature.name}</h2>
+                      <span style={{
+                        padding: '3px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: '600',
+                        backgroundColor: '#3b82f6', color: 'white',
+                      }}>USER-FACING</span>
+                    </div>
+                    {currentFeature.jiraNumber && <span style={{ color: '#60a5fa', fontSize: '14px', fontWeight: '500' }}>{currentFeature.jiraNumber}</span>}
+                    <span style={{ color: theme.textMuted, fontSize: '13px', marginLeft: '12px' }}>{currentFeature.developerTeam}</span>
+                  </div>
+                </div>
+                {currentFeature.problemSolved && (
+                  <p style={{ color: theme.textSecondary, fontSize: '14px', marginBottom: '16px', padding: '12px', backgroundColor: theme.background, borderRadius: '8px', margin: '0 0 16px 0' }}>
+                    {currentFeature.problemSolved}
+                  </p>
+                )}
+
+                {/* Vote count indicator */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '16px', backgroundColor: theme.background, borderRadius: '8px', marginBottom: '16px' }}>
+                  <div style={{ textAlign: 'center', flex: 1 }}>
+                    <div style={{ fontSize: '36px', fontWeight: 'bold', color: votedCount === voterCount ? '#10b981' : '#f59e0b' }}>{votedCount}</div>
+                    <div style={{ fontSize: '13px', color: theme.textMuted }}>of {voterCount} voted</div>
+                  </div>
+                  <div style={{ height: '60px', width: '1px', backgroundColor: theme.border }} />
+                  <div style={{ textAlign: 'center', flex: 1 }}>
+                    <div style={{ fontSize: '36px', fontWeight: 'bold', color: '#60a5fa' }}>{voterCount - votedCount}</div>
+                    <div style={{ fontSize: '13px', color: theme.textMuted }}>waiting</div>
+                  </div>
+                </div>
+
+                {/* Action button */}
+                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  <button onClick={handleLockAndAdvance} style={buttonSuccess}>
+                    <Lock size={16} /> Lock Votes & Score
+                  </button>
+                </div>
               </div>
-            </div>
+            </>
           )}
 
-          {/* Inline admin scoring — shown after votes are locked, while voters wait */}
+          {/* Inline admin scoring — shown after votes are locked for user-facing features */}
           {inlineScoring && (() => {
             const scoringFeature = sortedFeatures.find(f => f.id === inlineScoring);
-            const scores = featureScores[inlineScoring] || { rr: 3, cr: 1, sprints: 1 };
+            const scores = featureScores[inlineScoring] || { tc: 3, rr: 3, cr: 1, sprints: 1 };
             const isLastFeature = sessionMeta.currentFeatureIndex + 1 >= sortedFeatures.length;
 
             return scoringFeature ? (
@@ -790,8 +974,8 @@ function AdminPageInner() {
             <h3 style={{ fontSize: '16px', fontWeight: '600', color: theme.textPrimary, marginBottom: '12px' }}>Scoring Legend</h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
               <div>
-                <h4 style={{ fontSize: '14px', fontWeight: '600', color: '#60a5fa', marginBottom: '8px' }}>Business Value (UV)</h4>
-                {Object.entries(definitions.uv).map(([score, desc]) => (
+                <h4 style={{ fontSize: '14px', fontWeight: '600', color: '#60a5fa', marginBottom: '8px' }}>Business Value (BV)</h4>
+                {Object.entries(definitions.bv).map(([score, desc]) => (
                   <div key={score} style={{ fontSize: '12px', color: theme.textSecondary, marginBottom: '4px' }}>
                     <strong style={{ color: theme.textPrimary }}>{score}:</strong> {desc}
                   </div>
@@ -841,7 +1025,7 @@ function AdminPageInner() {
           <div style={cardStyle}>
             <h3 style={{ fontSize: '16px', fontWeight: '600', color: theme.textPrimary, marginBottom: '12px' }}>Cost of Delay Weights</h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
-              {(['uv', 'tc', 'rr', 'cr'] as const).map(key => (
+              {(['bv', 'tc', 'rr', 'cr'] as const).map(key => (
                 <div key={key}>
                   <label style={{ display: 'block', fontSize: '12px', color: theme.textMuted, marginBottom: '4px' }}>{key.toUpperCase()} Weight</label>
                   <input
@@ -856,7 +1040,7 @@ function AdminPageInner() {
           </div>
 
           {sortedFeatures.map((feature, i) => {
-            const scores = featureScores[feature.id] || { rr: 3, cr: 1, sprints: 1 };
+            const scores = featureScores[feature.id] || { tc: 3, rr: 3, cr: 1, sprints: 1 };
             const fVotes = allVotes[feature.id] || {};
             const voteCount = Object.keys(fVotes).length;
 
@@ -1010,7 +1194,7 @@ function AdminPageInner() {
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead style={{ backgroundColor: theme.background }}>
                   <tr>
-                    {['#', 'Feature', 'Type', 'Jira', 'Votes', 'UV(Adj)', 'UV Sig', 'TC(Adj)', 'TC Sig', 'RR', 'CR', 'CoD', 'Sprints', 'WSJF'].map(h => (
+                    {['#', 'Feature', 'Type', 'Jira', 'Votes', 'BV(Adj)', 'BV Sig', 'TC(Adj)', 'TC Sig', 'RR', 'CR', 'CoD', 'Sprints', 'WSJF'].map(h => (
                       <th key={h} style={{ padding: '10px 12px', textAlign: h === 'Feature' ? 'left' : 'center', fontSize: '11px', fontWeight: '600', color: theme.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</th>
                     ))}
                   </tr>
@@ -1041,8 +1225,8 @@ function AdminPageInner() {
                       </td>
                       <td style={{ padding: '12px 8px', textAlign: 'center', color: theme.textSecondary, fontSize: '13px' }}>{r.jiraNumber}</td>
                       <td style={{ padding: '12px 8px', textAlign: 'center', color: theme.textSecondary, fontSize: '13px' }}>{r.voteCount}</td>
-                      <td style={{ padding: '12px 8px', textAlign: 'center', color: theme.textSecondary, fontSize: '13px' }}>{r.adjustedUV.toFixed(1)}</td>
-                      <td style={{ padding: '12px 8px', textAlign: 'center', color: '#60a5fa', fontSize: '13px', fontWeight: '500' }}>{r.uvSignalStrength.toFixed(2)}x</td>
+                      <td style={{ padding: '12px 8px', textAlign: 'center', color: theme.textSecondary, fontSize: '13px' }}>{r.adjustedBV.toFixed(1)}</td>
+                      <td style={{ padding: '12px 8px', textAlign: 'center', color: '#60a5fa', fontSize: '13px', fontWeight: '500' }}>{r.bvSignalStrength.toFixed(2)}x</td>
                       <td style={{ padding: '12px 8px', textAlign: 'center', color: theme.textSecondary, fontSize: '13px' }}>{r.adjustedTC.toFixed(1)}</td>
                       <td style={{ padding: '12px 8px', textAlign: 'center', color: '#60a5fa', fontSize: '13px', fontWeight: '500' }}>{r.tcSignalStrength.toFixed(2)}x</td>
                       <td style={{ padding: '12px 8px', textAlign: 'center', color: theme.textSecondary, fontSize: '13px' }}>{r.rr}</td>

@@ -31,9 +31,9 @@ function getPersonaCounts(voters: Record<string, VoterProfile>): Record<string, 
 
 export function exportResultsCSV(results: FeatureResult[], sessionTitle: string, voters: Record<string, VoterProfile> = {}) {
   const headers = [
-    'Rank', 'Feature', 'Type', 'Jira #', 'Dev Team', 'Problem Solved',
+    'Rank', 'Feature', 'Type', 'Jira #', 'Dev Team', 'Description',
     'Vote Count', 'Unique Services', 'Unique Personas',
-    'Raw UV Avg', 'UV Signal', 'Adjusted UV',
+    'Raw BV Avg', 'BV Signal', 'Adjusted BV',
     'Raw TC Avg', 'TC Signal', 'Adjusted TC',
     'RR', 'CR', 'Cost of Delay', 'Sprints', 'WSJF Score'
   ];
@@ -48,9 +48,9 @@ export function exportResultsCSV(results: FeatureResult[], sessionTitle: string,
     r.voteCount,
     r.uniqueServices,
     r.uniquePersonas,
-    r.rawUVAvg.toFixed(2),
-    r.uvSignalStrength.toFixed(2),
-    r.adjustedUV.toFixed(2),
+    r.rawBVAvg.toFixed(2),
+    r.bvSignalStrength.toFixed(2),
+    r.adjustedBV.toFixed(2),
     r.rawTCAvg.toFixed(2),
     r.tcSignalStrength.toFixed(2),
     r.adjustedTC.toFixed(2),
@@ -168,8 +168,8 @@ export async function exportResultsPDF(
       r.featureType === 'architecture' ? 'Arch' : 'User',
       r.jiraNumber,
       r.voteCount.toString(),
-      r.adjustedUV.toFixed(1),
-      r.uvSignalStrength.toFixed(2) + 'x',
+      r.adjustedBV.toFixed(1),
+      r.bvSignalStrength.toFixed(2) + 'x',
       r.adjustedTC.toFixed(1),
       r.tcSignalStrength.toFixed(2) + 'x',
       r.rr.toString(),
@@ -181,7 +181,7 @@ export async function exportResultsPDF(
 
     if (typeof (doc as any).autoTable === 'function') {
       (doc as any).autoTable({
-        head: [['#', 'Feature', 'Type', 'Jira', 'Votes', 'UV(Adj)', 'UV Sig', 'TC(Adj)', 'TC Sig', 'RR', 'CR', 'CoD', 'Sprints', 'WSJF']],
+        head: [['#', 'Feature', 'Type', 'Jira', 'Votes', 'BV(Adj)', 'BV Sig', 'TC(Adj)', 'TC Sig', 'RR', 'CR', 'CoD', 'Sprints', 'WSJF']],
         body: tableData,
         startY,
         styles: { fontSize: 8, cellPadding: 2, lineColor: [220, 220, 220], lineWidth: 0.5 },
@@ -315,7 +315,7 @@ export async function exportResultsPDF(
   doc.setFontSize(7);
   doc.setTextColor(100, 100, 100);
   doc.text(
-    'WSJF = Cost of Delay / Sprints | UV & TC use Signal Strength (Volume x Svc Spread x Persona Spread x Consensus, cap 2.0) | Higher WSJF = Higher Priority',
+    'WSJF = Cost of Delay / Sprints | BV & TC use Signal Strength (Volume x Svc Spread x Persona Spread x Consensus, cap 2.0) | Higher WSJF = Higher Priority',
     148,
     doc.internal.pageSize.height - 10,
     { align: 'center' },

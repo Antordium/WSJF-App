@@ -50,7 +50,7 @@ export const DEFAULT_SCORE = 3;
 // ===========================
 
 export const definitions = {
-  uv: {
+  bv: {
     1: 'Minimal user benefit; purely technical or internal.',
     2: 'Small improvement; affects a limited group or edge case.',
     3: 'Moderate value; addresses a common user need.',
@@ -95,13 +95,9 @@ export const STORAGE_KEYS = {
 // ===========================
 
 export const RANK_OPTIONS = [
-  'PVT', 'PV2', 'PFC', 'SPC', 'CPL',
-  'SGT', 'SSG', 'SFC', 'MSG', '1SG', 'SGM', 'CSM',
-  'WO1', 'CW2', 'CW3', 'CW4', 'CW5',
-  '2LT', '1LT', 'CPT', 'MAJ', 'LTC', 'COL',
-  'BG', 'MG', 'LTG', 'GEN',
-  'E1', 'E2', 'E3', 'E4', 'E5', 'E6', 'E7', 'E8', 'E9',
-  'O1', 'O2', 'O3', 'O4', 'O5', 'O6',
+  'E-1', 'E-2', 'E-3', 'E-4', 'E-5', 'E-6', 'E-7', 'E-8', 'E-9',
+  'W-1', 'W-2', 'W-3', 'W-4', 'W-5',
+  'O-1', 'O-2', 'O-3', 'O-4', 'O-5', 'O-6', 'O-7', 'O-8', 'O-9', 'O-10',
   'GS-7', 'GS-9', 'GS-11', 'GS-12', 'GS-13', 'GS-14', 'GS-15',
-  'CTR', 'CIV', 'Other'
+  'CIV',
 ];

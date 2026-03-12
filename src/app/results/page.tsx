@@ -212,7 +212,7 @@ function ResultsPageInner() {
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead style={{ backgroundColor: theme.background }}>
                 <tr>
-                  {['#', 'Feature', 'Type', 'Jira', 'Votes', 'UV(Adj)', 'UV Sig', 'TC(Adj)', 'TC Sig', 'RR', 'CR', 'CoD', 'Sprints', 'WSJF'].map(h => (
+                  {['#', 'Feature', 'Type', 'Jira', 'Votes', 'BV(Adj)', 'BV Sig', 'TC(Adj)', 'TC Sig', 'RR', 'CR', 'CoD', 'Sprints', 'WSJF'].map(h => (
                     <th key={h} style={{
                       padding: '12px', textAlign: h === 'Feature' ? 'left' : 'center',
                       fontSize: '11px', fontWeight: '600', color: theme.textMuted,
@@ -247,8 +247,8 @@ function ResultsPageInner() {
                     </td>
                     <td style={{ padding: '14px 8px', textAlign: 'center', color: theme.textSecondary, fontSize: '13px' }}>{r.jiraNumber}</td>
                     <td style={{ padding: '14px 8px', textAlign: 'center', color: theme.textSecondary, fontSize: '13px' }}>{r.voteCount}</td>
-                    <td style={{ padding: '14px 8px', textAlign: 'center', color: theme.textSecondary, fontSize: '13px' }}>{r.adjustedUV.toFixed(1)}</td>
-                    <td style={{ padding: '14px 8px', textAlign: 'center', color: '#60a5fa', fontSize: '13px', fontWeight: '500' }}>{r.uvSignalStrength.toFixed(2)}x</td>
+                    <td style={{ padding: '14px 8px', textAlign: 'center', color: theme.textSecondary, fontSize: '13px' }}>{r.adjustedBV.toFixed(1)}</td>
+                    <td style={{ padding: '14px 8px', textAlign: 'center', color: '#60a5fa', fontSize: '13px', fontWeight: '500' }}>{r.bvSignalStrength.toFixed(2)}x</td>
                     <td style={{ padding: '14px 8px', textAlign: 'center', color: theme.textSecondary, fontSize: '13px' }}>{r.adjustedTC.toFixed(1)}</td>
                     <td style={{ padding: '14px 8px', textAlign: 'center', color: '#f59e0b', fontSize: '13px', fontWeight: '500' }}>{r.tcSignalStrength.toFixed(2)}x</td>
                     <td style={{ padding: '14px 8px', textAlign: 'center', color: theme.textSecondary, fontSize: '13px' }}>{r.rr}</td>
@@ -265,7 +265,7 @@ function ResultsPageInner() {
 
         {/* Footer */}
         <div style={{ textAlign: 'center', padding: '16px', fontSize: '12px', color: theme.textMuted }}>
-          WSJF = Cost of Delay / Sprints | UV & TC use Signal Strength algorithm | Higher WSJF = Higher Priority
+          WSJF = Cost of Delay / Sprints | BV & TC use Signal Strength algorithm | Higher WSJF = Higher Priority
         </div>
       </div>
     </div>
