@@ -78,6 +78,7 @@ function AdminPageInner() {
   // Results tab state
   const [activeTeamTab, setActiveTeamTab] = useState<string>('');
   const [showVoterDetails, setShowVoterDetails] = useState(false);
+  const [showVoterList, setShowVoterList] = useState(false);
 
   // ===========================
   // SORTED FEATURES
@@ -861,6 +862,42 @@ function AdminPageInner() {
                       Copy Link
                     </button>
                   </div>
+                </div>
+
+                {/* Collapsible voter list */}
+                <div style={{ marginTop: '12px', borderTop: `1px solid ${theme.border}`, paddingTop: '12px' }}>
+                  <button
+                    onClick={() => setShowVoterList(prev => !prev)}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: theme.textMuted, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px', margin: '0 auto' }}
+                  >
+                    <Users size={16} />
+                    Voters Joined: {voterCount}
+                    {showVoterList ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                  </button>
+                  {showVoterList && Object.values(voters).length > 0 && (
+                    <div style={{ marginTop: '10px', overflowX: 'auto', textAlign: 'left' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                        <thead>
+                          <tr style={{ borderBottom: `1px solid ${theme.border}` }}>
+                            <th style={{ padding: '6px 8px', textAlign: 'left', color: theme.textMuted, fontWeight: '500' }}>Name</th>
+                            <th style={{ padding: '6px 8px', textAlign: 'left', color: theme.textMuted, fontWeight: '500' }}>Paygrade</th>
+                            <th style={{ padding: '6px 8px', textAlign: 'left', color: theme.textMuted, fontWeight: '500' }}>Persona</th>
+                            <th style={{ padding: '6px 8px', textAlign: 'left', color: theme.textMuted, fontWeight: '500' }}>Service</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {Object.values(voters).map(v => (
+                            <tr key={v.id} style={{ borderBottom: `1px solid ${theme.border}` }}>
+                              <td style={{ padding: '6px 8px', color: theme.textPrimary }}>{v.rank} {v.lastName}, {v.firstName}</td>
+                              <td style={{ padding: '6px 8px', color: theme.textSecondary }}>{v.rank}</td>
+                              <td style={{ padding: '6px 8px', color: theme.textSecondary }}>{PERSONA_LABELS[v.persona]}</td>
+                              <td style={{ padding: '6px 8px', color: theme.textSecondary }}>{SERVICE_LABELS[v.service]}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
               </div>
 
