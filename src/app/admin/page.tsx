@@ -24,6 +24,7 @@ import {
   listenToVoters,
   listenToVotes,
   listenToAllVotes,
+  listenToResults,
 } from '../../lib/firebase';
 
 // ===========================
@@ -121,6 +122,12 @@ function AdminPageInner() {
       listenToFeatures(sessionId, (f) => setFeatures(f || {})),
       listenToVoters(sessionId, (v) => setVoters(v || {})),
       listenToAllVotes(sessionId, (v) => setAllVotes(v || {})),
+      listenToResults(sessionId, (r) => {
+        if (r) {
+          const list = Object.values(r).sort((a, b) => b.wsjf - a.wsjf);
+          setResults(list);
+        }
+      }),
     ];
     return () => unsubs.forEach(u => u());
   }, [sessionId, isAuthenticated]);
