@@ -20,7 +20,8 @@
     "next": "^16.0.8",
     "qrcode.react": "^4.2.0",
     "react": "^19.2.1",
-    "tsup": "^8.5.0"
+    "tsup": "^8.5.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

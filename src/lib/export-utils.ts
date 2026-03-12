@@ -1,10 +1,35 @@
-import type { FeatureResult } from './types';
+import type { FeatureResult, VoterProfile, PersonaType, ServiceType } from './types';
+import { PERSONA_LABELS, SERVICE_LABELS, PERSONA_WEIGHTS } from './constants';
+
+// ===========================
+// VOTER DEMOGRAPHICS HELPERS
+// ===========================
+
+function getServiceCounts(voters: Record<string, VoterProfile>): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const v of Object.values(voters)) {
+    const label = SERVICE_LABELS[v.service as ServiceType] || v.service;
+    counts[label] = (counts[label] || 0) + 1;
+  }
+  return counts;
+}
+
+function getPersonaCounts(voters: Record<string, VoterProfile>): Record<string, { count: number; weight: number }> {
+  const counts: Record<string, { count: number; weight: number }> = {};
+  for (const v of Object.values(voters)) {
+    const label = PERSONA_LABELS[v.persona as PersonaType] || v.persona;
+    const weight = PERSONA_WEIGHTS[v.persona as PersonaType] || 1.0;
+    if (!counts[label]) counts[label] = { count: 0, weight };
+    counts[label].count += 1;
+  }
+  return counts;
+}
 
 // ===========================
 // CSV EXPORT
 // ===========================
 
-export function exportResultsCSV(results: FeatureResult[], sessionTitle: string) {
+export function exportResultsCSV(results: FeatureResult[], sessionTitle: string, voters: Record<string, VoterProfile> = {}) {
   const headers = [
     'Rank', 'Feature', 'Jira #', 'Dev Team', 'Problem Solved',
     'Vote Count', 'Unique Services', 'Unique Personas',
@@ -35,9 +60,35 @@ export function exportResultsCSV(results: FeatureResult[], sessionTitle: string)
     r.wsjf.toFixed(2),
   ]);
 
+  // Voting demographics section
+  const voterCount = Object.keys(voters).length;
+  const serviceCounts = getServiceCounts(voters);
+  const personaCounts = getPersonaCounts(voters);
+
+  const demographicsRows: string[] = [
+    '',
+    '',
+    'Voting Session Demographics',
+    '',
+    `Total Voters,${voterCount}`,
+    `Unique Services,${Object.keys(serviceCounts).length}`,
+    `Unique Personas,${Object.keys(personaCounts).length}`,
+    '',
+    'Service,Count',
+    ...Object.entries(serviceCounts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([svc, count]) => `${svc},${count}`),
+    '',
+    'Persona,Count,Weight',
+    ...Object.entries(personaCounts)
+      .sort((a, b) => b[1].count - a[1].count)
+      .map(([persona, { count, weight }]) => `${persona},${count},${weight}`),
+  ];
+
   const csvContent = [
     headers.join(','),
-    ...rows.map(row => row.join(','))
+    ...rows.map(row => row.join(',')),
+    ...(voterCount > 0 ? demographicsRows : []),
   ].join('\n');
 
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -58,8 +109,11 @@ export function exportResultsCSV(results: FeatureResult[], sessionTitle: string)
 export async function exportResultsPDF(
   results: FeatureResult[],
   sessionTitle: string,
-  voterCount: number,
+  voters: Record<string, VoterProfile> = {},
+  voterCountOverride?: number,
 ) {
+  const voterCount = voterCountOverride ?? Object.keys(voters).length;
+  const hasVoterDetails = Object.keys(voters).length > 0;
   const jsPDFModule = await import('jspdf');
   const jsPDF = jsPDFModule.jsPDF || jsPDFModule.default;
   await import('jspdf-autotable');
@@ -160,7 +214,101 @@ export async function exportResultsPDF(
     }
   }
 
-  // Footer
+  // ===========================
+  // Voting Session Demographics page
+  // ===========================
+  if (hasVoterDetails) {
+    doc.addPage();
+
+    // Section header
+    doc.setFillColor(59, 130, 246);
+    doc.rect(0, 0, 297, 30, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(18);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Voting Session Demographics', 148, 14, { align: 'center' });
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Total Voters: ${voterCount} | Features Scored: ${results.length}`, 148, 24, { align: 'center' });
+
+    doc.setTextColor(0, 0, 0);
+
+    const pdfServiceCounts = getServiceCounts(voters);
+    const pdfPersonaCounts = getPersonaCounts(voters);
+    const uniqueServices = Object.keys(pdfServiceCounts).length;
+    const uniquePersonas = Object.keys(pdfPersonaCounts).length;
+
+    let demoY = 40;
+
+    // Service Representation table
+    doc.setFillColor(243, 244, 246);
+    doc.roundedRect(14, demoY, 269, 10, 2, 2, 'F');
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Service Representation (${uniqueServices} unique)`, 18, demoY + 7);
+    demoY += 14;
+
+    const serviceData = Object.entries(pdfServiceCounts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([svc, count]) => [svc, count.toString(), `${((count / voterCount) * 100).toFixed(0)}%`]);
+
+    if (typeof (doc as any).autoTable === 'function') {
+      (doc as any).autoTable({
+        head: [['Service / Sub-Unified Command', 'Voters', '% of Total']],
+        body: serviceData,
+        startY: demoY,
+        styles: { fontSize: 9, cellPadding: 3, lineColor: [220, 220, 220], lineWidth: 0.5 },
+        headStyles: { fillColor: [59, 130, 246], textColor: 255, fontStyle: 'bold', halign: 'center', fontSize: 9 },
+        alternateRowStyles: { fillColor: [249, 250, 251] },
+        columnStyles: {
+          0: { cellWidth: 120 },
+          1: { halign: 'center', cellWidth: 40 },
+          2: { halign: 'center', cellWidth: 40 },
+        },
+        margin: { left: 14, right: 14 },
+        tableWidth: 200,
+      });
+      demoY = (doc as any).lastAutoTable.finalY + 16;
+    }
+
+    // Persona Representation table
+    doc.setFillColor(243, 244, 246);
+    doc.roundedRect(14, demoY, 269, 10, 2, 2, 'F');
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Persona Representation (${uniquePersonas} unique)`, 18, demoY + 7);
+    demoY += 14;
+
+    const personaData = Object.entries(pdfPersonaCounts)
+      .sort((a, b) => b[1].count - a[1].count)
+      .map(([persona, { count, weight }]) => [
+        persona,
+        count.toString(),
+        `${((count / voterCount) * 100).toFixed(0)}%`,
+        `${weight}x`,
+      ]);
+
+    if (typeof (doc as any).autoTable === 'function') {
+      (doc as any).autoTable({
+        head: [['Persona', 'Voters', '% of Total', 'Weight']],
+        body: personaData,
+        startY: demoY,
+        styles: { fontSize: 9, cellPadding: 3, lineColor: [220, 220, 220], lineWidth: 0.5 },
+        headStyles: { fillColor: [59, 130, 246], textColor: 255, fontStyle: 'bold', halign: 'center', fontSize: 9 },
+        alternateRowStyles: { fillColor: [249, 250, 251] },
+        columnStyles: {
+          0: { cellWidth: 120 },
+          1: { halign: 'center', cellWidth: 40 },
+          2: { halign: 'center', cellWidth: 40 },
+          3: { halign: 'center', cellWidth: 40, fontStyle: 'bold', textColor: [59, 130, 246] },
+        },
+        margin: { left: 14, right: 14 },
+        tableWidth: 240,
+      });
+    }
+  }
+
+  // Footer on last page
   doc.setFontSize(7);
   doc.setTextColor(100, 100, 100);
   doc.text(

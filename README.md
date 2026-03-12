@@ -1,311 +1,323 @@
-# WSJF Calculator v4.0
+# PCTE Business Value Voting Tool v5.0
 
-A modern, feature-rich **Weighted Shortest Job First (WSJF)** prioritization tool built with Next.js and React. Designed for SAFe/Agile teams to make data-driven prioritization decisions using the WSJF framework.
+A real-time, multi-user **Weighted Shortest Job First (WSJF)** prioritization platform with Signal Strength scoring. Built for PCTE stakeholders to collaboratively vote on feature business value, with persona-weighted scoring and cross-service consensus analysis.
 
-![WSJF Calculator](https://img.shields.io/badge/version-4.0-blue) ![Next.js](https://img.shields.io/badge/Next.js-15.3.3-black) ![React](https://img.shields.io/badge/React-19.0-blue) ![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)
+![Version](https://img.shields.io/badge/version-5.0-blue) ![Next.js](https://img.shields.io/badge/Next.js-16.0.8-black) ![React](https://img.shields.io/badge/React-19.2-blue) ![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue) ![Firebase](https://img.shields.io/badge/Firebase-RTDB-orange)
 
-## 📊 What is WSJF?
+## What is WSJF?
 
-WSJF (Weighted Shortest Job First) is a prioritization model used in SAFe (Scaled Agile Framework) to sequence work for maximum economic benefit. The formula calculates a priority score based on the **Cost of Delay** divided by the **job effort**.
+WSJF (Weighted Shortest Job First) is a prioritization model used in SAFe (Scaled Agile Framework) to sequence work for maximum economic benefit.
 
-### WSJF Formula
+### Formula
 
 ```
 WSJF = Cost of Delay / Number of Sprints
 
-Where Cost of Delay = (UV × weight) + (TC × weight) + (RR × weight) + (CR × weight)
+Cost of Delay = (Adjusted UV x weight) + (Adjusted TC x weight) + (RR x weight) + (CR x weight)
+
+Adjusted UV = Weighted UV Average x Signal Strength
+Adjusted TC = Raw TC Average x Signal Strength
 ```
 
-**Factors:**
-- **UV** (User Value): Business value delivered to users
-- **TC** (Time Criticality): Urgency and time sensitivity
-- **RR** (Risk Reduction): Risk mitigation and opportunity enablement
-- **CR** (Compliance/Regulatory): Regulatory or compliance requirements
+**Factors (1-5 scale):**
+- **UV** (User Value): Business value delivered to users -- scored by voters
+- **TC** (Time Criticality): Urgency and time sensitivity -- scored by voters
+- **RR** (Risk Reduction): Risk mitigation and opportunity enablement -- scored by admin
+- **CR** (Compliance/Regulatory): Regulatory or compliance requirements -- scored by admin
+- **Sprints** (1-6): Estimated effort in sprint iterations -- set by admin
 
-## ✨ Features
+### Signal Strength Algorithm
 
-### v4.0 Updates (Latest)
-- **Simplified Scoring**: All WSJF factors now use a clean 1-5 scale (previously Fibonacci 1,3,6,8,10)
-- **Sprint-Based Estimation**: Changed from generic "Job Size" to "Number of Sprints" (1-6 range)
-- **Enhanced PDF Export**: Beautiful, professional PDF reports with:
-  - Branded header with blue gradient
-  - Visual hierarchy and color-coded top 3 priorities
-  - Summary statistics and weight configurations
-  - Clean, modern table design
-- **CSV Export**: Quick data export to CSV for spreadsheet analysis
-- **Fixed Layout**: Slider descriptions no longer cause layout shifts
-- **Improved Documentation**: Comprehensive inline code comments
+Signal Strength adjusts raw vote averages based on vote quality (capped at 2.0x):
 
-### Core Features
-- **Interactive Prioritization**: Score objectives across four WSJF factors
-- **Customizable Weights**: Adjust importance of each factor (1-10 scale)
-- **Automatic Ranking**: Real-time WSJF calculation and sorting
-- **Dark Mode**: Toggle between light and dark themes
-- **Dual Export Options**:
-  - **PDF**: Professional reports with visual styling
-  - **CSV**: Quick export for Excel/Google Sheets
-- **Responsive Design**: Works on desktop, tablet, and mobile
-- **In-Memory Storage**: No database required, session-based data
-- **Tooltips & Help**: Contextual guidance for each factor
+```
+Signal Strength = min(2.0, Volume x Service Spread x Persona Spread x Consensus)
 
-## 🚀 Quick Start
+Volume Factor   = min(1.2, max(0.85, 0.8 + log2(voters) x 0.1))
+Service Spread  = min(1.6, 1.0 + 0.15 x (unique_services - 1))
+Persona Spread  = min(1.5, 1.0 + 0.1 x (unique_personas - 1))
+Consensus Bonus = max(1.0, min(1.15, 1.0 + 0.15 x (1 - StdDev/Mean)))
+```
+
+Features with votes from more services, more persona types, and higher agreement receive stronger signal amplification.
+
+### Persona Weights
+
+Votes are weighted by persona to reflect stakeholder influence:
+
+| Persona | Weight |
+|---------|--------|
+| USCYBERCOM | 1.4x |
+| Operator | 1.3x |
+| Trainer | 1.1x |
+| Content Author / Range Engineer | 1.0x |
+| Leadership | 0.9x |
+| Platform Maintainer | 0.85x |
+
+## Features
+
+### Real-Time Multi-User Voting
+- Admin creates a session with features to score
+- Voters join via session code or QR code
+- Real-time vote collection using Firebase Realtime Database
+- Voters score UV and TC per feature on a guided 1-5 scale
+
+### Admin Controls (`/admin`)
+- Create voting sessions with title, PIN, and feature list
+- Each feature captures: name, Jira number, problem statement, developer team
+- Start/lock/advance voting per feature
+- Enter admin scores (RR, CR, Sprints) per feature
+- Configure WSJF weights
+- Calculate final WSJF with Signal Strength
+- Export results with full voter demographics (service & persona breakdown)
+
+### Voter Experience (`/vote`)
+- Register with persona, service/sub-unified command, rank, and name
+- Lobby view while waiting for admin to open voting
+- Score UV and TC per feature with contextual definitions
+- Progress indicator (Feature X of Y)
+- Automatic reconnection via localStorage voter ID
+
+### Results Dashboard (`/results`)
+- Results grouped by developer team with tab filtering
+- Full metric breakdown: raw/adjusted UV, raw/adjusted TC, signal strength, RR, CR, Cost of Delay, sprints, WSJF
+- Top 3 features color-coded per team (green, orange, darker orange)
+- Export to PDF and CSV
+
+### Standalone Calculator (`/`)
+- Local WSJF calculator with localStorage persistence (no Firebase required)
+- Multi-voter UV scoring with persona/service tracking
+- Signal Strength visualization
+- Customizable factor weights (1-10)
+- Add/edit/delete initiatives
+
+### Export Reports
+- **PDF**: Landscape report with branded header, team-grouped tables, color-coded top 3, and voter demographics page (admin only)
+- **CSV**: Full data export with signal strength metrics and voter demographics appendix (admin only)
+- Voter demographic data (service/persona breakdown) included only in admin exports for traceability
+
+### Additional
+- Dark mode with system preference detection and localStorage persistence
+- Responsive design for desktop, tablet, and mobile
+- QR code generation for easy session sharing
+- Contextual tooltips and scoring definitions throughout
+
+## Tech Stack
+
+| Technology | Purpose |
+|-----------|---------|
+| **Next.js 16.0.8** | React framework with static export (`output: 'export'`) |
+| **React 19.2** | UI rendering |
+| **TypeScript 5.x** | Type safety |
+| **Firebase Realtime Database** | Real-time session, voter, and vote persistence |
+| **Tailwind CSS 4.x** | Utility-first styling with custom theme system |
+| **jsPDF + jspdf-autotable** | PDF report generation |
+| **qrcode.react** | QR code generation for session joining |
+| **Lucide React** | Icon library |
+| **GitHub Pages** | Static site deployment via GitHub Actions |
+
+## Project Structure
+
+```
+WSJF-App/
+├── src/
+│   ├── app/
+│   │   ├── page.tsx                # Standalone WSJF Calculator
+│   │   ├── admin/page.tsx          # Admin session management
+│   │   ├── vote/page.tsx           # Voter interface
+│   │   ├── results/page.tsx        # Results dashboard
+│   │   ├── layout.tsx              # Root layout
+│   │   └── globals.css             # Tailwind + custom styles
+│   └── lib/
+│       ├── types.ts                # Shared TypeScript interfaces
+│       ├── algorithm.ts            # Signal Strength & WSJF calculation
+│       ├── firebase.ts             # Firebase RTDB integration
+│       ├── constants.ts            # Personas, services, weights, scoring definitions
+│       ├── export-utils.ts         # CSV & PDF export with demographics
+│       └── theme.ts                # Dark/light mode theme
+├── .github/workflows/
+│   └── deploy-gh-pages.yml         # GitHub Pages CI/CD
+├── next.config.mjs                 # Next.js config (static export, basePath)
+├── package.json
+└── tsconfig.json
+```
+
+## Quick Start
 
 ### Prerequisites
-- Node.js 18.x or higher
-- npm, yarn, pnpm, or bun
+- Node.js 20.x or higher
+- npm
+- Firebase project with Realtime Database enabled
+
+### Environment Variables
+
+Create `.env.local` with your Firebase configuration:
+
+```
+NEXT_PUBLIC_FIREBASE_API_KEY=...
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=...
+NEXT_PUBLIC_FIREBASE_DATABASE_URL=...
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=...
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=...
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=...
+NEXT_PUBLIC_FIREBASE_APP_ID=...
+```
+
+The standalone calculator (`/`) works without Firebase. The multi-user voting features (`/admin`, `/vote`, `/results`) require Firebase.
 
 ### Installation
 
 ```bash
-# Clone or download the repository
-cd WSJF-App-WSJF-v3
+git clone https://github.com/Antordium/WSJF-App.git
+cd WSJF-App
 
-# Install dependencies
 npm install
-
-# Run development server
 npm run dev
-
-# Build for production
-npm run build
-
-# Start production server
-npm start
 ```
 
 Open [http://localhost:3000](http://localhost:3000) to see the application.
 
-## 📖 How to Use
+### Build
 
-### 1. Configure Cost of Delay Weights (Optional)
-Adjust the weights (1-10) for each WSJF factor based on your team's priorities:
-- **User Value**: How much you value customer impact
-- **Time Criticality**: Importance of deadlines
-- **Risk Reduction**: Focus on risk mitigation
-- **Compliance**: Priority of regulatory requirements
-
-### 2. Add Objectives
-For each objective/initiative:
-1. Enter a descriptive name
-2. Score each factor (1-5 scale):
-   - **1**: Minimal impact
-   - **2**: Minor impact
-   - **3**: Moderate impact (default)
-   - **4**: Significant impact
-   - **5**: Major impact
-3. Estimate **Number of Sprints** (1-6)
-4. Click "Add Objective"
-
-### 3. Review Prioritized List
-- Objectives are automatically ranked by WSJF score (highest first)
-- **Top 3** items are visually highlighted with colored badges:
-  - 🟢 #1 - Green
-  - 🟠 #2 - Orange
-  - 🟠 #3 - Darker Orange
-- View Cost of Delay and WSJF scores for each item
-
-### 4. Export Results
-- **Export to PDF**: Generate a professional report with branding and visual design
-- **Export to CSV**: Download raw data for further analysis
-
-## 🏗️ Technical Architecture
-
-### Tech Stack
-- **Framework**: Next.js 15.3.3 (React 19)
-- **Language**: TypeScript 5.x
-- **Styling**: Inline styles with theme system
-- **Icons**: Lucide React
-- **PDF Generation**: jsPDF with autoTable plugin
-- **Build Tool**: Next.js built-in (SWC compiler)
-
-### Project Structure
-```
-WSJF-App-WSJF-v3/
-├── src/
-│   └── app/
-│       ├── page.tsx              # Main WSJF Calculator component
-│       ├── layout.tsx             # Root layout
-│       ├── wsjf-app-style.ts     # Web component styles
-│       └── wsjf-webcomponent.tsx # Web component wrapper
-├── public/                        # Static assets
-├── package.json                   # Dependencies & scripts
-└── README.md                      # This file
+```bash
+npm run build    # Static export to ./out
 ```
 
-### Key Components
+## How to Use
 
-#### Main Application (`page.tsx`)
-- **WSJFApp**: Main application component
-- **ScoringSlider**: Reusable slider for factor scoring
-- **DarkModeToggle**: Theme switcher
-- **Tooltip**: Help text overlay
-- **ConfigPanel**: Storage mode display
+### Multi-User Voting Session
 
-#### State Management
-- **initiatives**: Array of all objectives
-- **weights**: Cost of Delay factor weights
-- **newInitiative**: Form state for adding objectives
-- **isDarkMode**: Theme preference (persisted to localStorage)
+**Admin:**
+1. Go to `/admin` and create a new session (title + PIN + feature list)
+2. Share the session code or QR code with voters
+3. Start voting when voters have joined
+4. Lock & advance through each feature
+5. After all features are voted on, enter admin scores (RR, CR, Sprints) per feature
+6. Configure weights and calculate WSJF
+7. Export results (PDF/CSV with voter demographics)
 
-#### WSJF Calculation (useMemo)
-```typescript
-WSJF = (UV×weight_uv + TC×weight_tc + RR×weight_rr + CR×weight_cr) / sprints
-```
+**Voter:**
+1. Go to `/vote` and enter the session code
+2. Register with persona, service, rank, and name
+3. Wait in lobby for admin to start
+4. Score UV and TC for each feature as it opens
+5. View results when admin publishes them
 
-Automatically recalculates when:
-- Initiatives change
-- Weights are adjusted
+### Standalone Calculator
+1. Go to `/` to use the local calculator
+2. Add initiatives with name and description
+3. Score UV (multi-voter), TC, RR, CR, and estimate sprints
+4. Adjust factor weights as needed
+5. Export ranked results to PDF or CSV
 
-## 🎨 Scoring Guidelines
+## Deployment
 
-### User Value (UV)
-- **1**: Minimal user benefit, purely technical
-- **2**: Minor convenience or slight improvement
-- **3**: Moderate efficiency improvement
-- **4**: Significant value or workflow improvement
-- **5**: Major value, eliminates substantial manual effort
+### GitHub Pages (Current)
 
-### Time Criticality (TC)
-- **1**: No time pressure, can be delivered anytime
-- **2**: Minor preference for earlier delivery
-- **3**: Moderate time pressure
-- **4**: High criticality, affects business events
-- **5**: Severe criticality, major business impact
+Automated via GitHub Actions on push to configured branches. Firebase secrets are injected as GitHub Actions secrets.
 
-### Risk Reduction (RR)
-- **1**: No known risk mitigation
-- **2**: Reduces minor operational inefficiencies
-- **3**: Moderate risk reduction
-- **4**: Significantly reduces operational risk
-- **5**: Prevents high-impact development failure
-
-### Compliance/Regulatory (CR)
-- **1**: No compliance requirement
-- **2**: Good to have for future compliance
-- **3**: Addresses emerging compliance need
-- **4**: Required for upcoming audit or SLA
-- **5**: Mandated by law/regulation, severe consequences
-
-### Number of Sprints
-Estimate how many sprints (iterations) are needed to complete the work:
-- **1 sprint**: Small, quick win
-- **2-3 sprints**: Medium effort
-- **4-5 sprints**: Larger initiative
-- **6 sprints**: Major undertaking
-
-## 🌙 Dark Mode
-
-The application features a fully-implemented dark mode:
-- Toggle via button in header
-- Preference saved to localStorage
-- Respects system dark mode preference on first load
-- All UI elements adapt to theme
-
-## 📤 Export Formats
-
-### PDF Export
-Professional reports include:
-- Branded header with blue gradient
-- Generation timestamp
-- Cost of Delay weights summary
-- Color-coded ranking table
-- Visual highlighting of top 3 priorities
-- Formatted for printing
-
-### CSV Export
-Simple comma-separated format with headers:
-```
-Rank, Objective, UV, TC, RR, CR, Sprints, Cost of Delay, WSJF Score
-```
-
-## 🚢 Deployment
-
-### Deploy to Vercel (Recommended)
-
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new)
-
-1. Push code to GitHub/GitLab/Bitbucket
-2. Import project in Vercel
-3. Deploy (zero configuration needed)
+The workflow:
+1. Builds with `GITHUB_PAGES=true` (sets `/WSJF-App` basePath)
+2. Exports static site to `./out`
+3. Deploys via `actions/deploy-pages@v4`
 
 ### Manual Deployment
 
 ```bash
-# Build the application
 npm run build
-
-# Start production server
-npm start
+# Deploy ./out directory to any static hosting provider
 ```
 
-The app will run on port 3000 by default.
+## Firebase Data Model
 
-### Environment Variables
-No environment variables required! The app uses in-memory storage.
-
-## 🔧 Development
-
-### Available Scripts
-
-```bash
-npm run dev          # Start development server
-npm run build        # Build for production
-npm start            # Start production server
-npm run lint         # Run ESLint
+```
+sessions/{sessionId}/
+├── meta/          # title, status, currentFeatureIndex, adminPin, createdAt
+├── features/      # {id, name, jiraNumber, problemSolved, developerTeam, order, votingOpen, rr, cr, sprints}
+├── voters/        # {id, persona, service, rank, lastName, firstName, joinedAt}
+├── votes/         # votes/{featureId}/{voterId} → {uv, tc, timestamp}
+└── results/       # Calculated FeatureResult objects per feature
 ```
 
-### Code Structure
-The codebase is organized with clear section headers:
-- **Constants & Scoring Scales**: Score arrays and ranges
-- **Scoring Definitions**: Descriptive text for each level
-- **Theme Configuration**: Dark/light mode colors
-- **UI Components**: Reusable React components
-- **Main Application**: Core WSJF calculator logic
-- **Export Functions**: PDF and CSV generation
-- **WSJF Calculation**: Score computation with useMemo
+Session data persists indefinitely in Firebase and can be queried after the fact.
 
-All functions include JSDoc comments explaining purpose and parameters.
+## Scoring Guidelines
 
-## 📝 Version History
+### User Value (UV)
+| Score | Definition |
+|-------|-----------|
+| 1 | Minimal user benefit; purely technical or internal |
+| 2 | Small improvement; affects a limited group or edge case |
+| 3 | Moderate value; addresses a common user need |
+| 4 | High value; significant impact on mission readiness |
+| 5 | Major value; transforms user capability or removes critical blocker |
 
-### v4.0 (Current)
+### Time Criticality (TC)
+| Score | Definition |
+|-------|-----------|
+| 1 | No time pressure; do anytime |
+| 2 | Some urgency; within the next few PIs |
+| 3 | Moderate criticality; within 1-2 PIs |
+| 4 | Urgent; must deliver this PI or face impact |
+| 5 | Severe criticality; miss this PI = mission failure or penalty |
+
+### Risk Reduction (RR)
+| Score | Definition |
+|-------|-----------|
+| 1 | No risk mitigation; does not affect reliability |
+| 2 | Minor risk reduction; addresses low-probability issues |
+| 3 | Moderate risk reduction; improves system stability |
+| 4 | High risk reduction; prevents major outage scenario |
+| 5 | Prevents high-impact failure; eliminates existential risk |
+
+### Compliance/Regulatory (CR)
+| Score | Definition |
+|-------|-----------|
+| 1 | No compliance requirement |
+| 2 | Internal policy alignment; nice to have |
+| 3 | Recommended by audit; should address |
+| 4 | Required by regulation or SLA within defined timeline |
+| 5 | Mandated by law, DoD directive, or immediate SLA breach risk |
+
+## Services / Sub-Unified Commands
+
+USCYBERCOM, ARCYBER, FLTCYBER, MARFORCYBER, AFCYBER, CGCYBER, CNMF, DCDC, Other
+
+## Version History
+
+### v5.0 (Current) - Signal Strength & Multi-User Voting
+- Real-time multi-user voting platform with Firebase Realtime Database
+- Admin/voter role separation with PIN-authenticated sessions
+- Signal Strength algorithm: adjusts scores based on vote volume, service spread, persona spread, and consensus
+- Persona-weighted scoring (USCYBERCOM 1.4x through Platform Maintainer 0.85x)
+- QR code session sharing
+- Voter demographics in admin exports (service & persona breakdown)
+- Developer team grouping in results and exports
+- Results dashboard with team-based tab filtering
+- Jira number and problem statement tracking per feature
+
+### v4.0
 - Changed factor scoring from Fibonacci to 1-5 scale
 - Renamed "Job Size" to "Number of Sprints" (1-6)
 - Enhanced PDF export with professional design
 - Added CSV export functionality
-- Fixed slider layout shift issues
-- Improved code documentation
 
 ### v3.x
-- Previous versions (legacy scoring system)
+- Legacy scoring system
 
-## 🤝 Contributing
-
-This is an internal tool, but suggestions are welcome:
-1. Test the application
-2. Report issues or suggest features
-3. Submit feedback
-
-## 📄 License
+## License
 
 Internal use license. Not for public distribution.
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
-- Built with [Next.js](https://nextjs.org/)
+- Built with [Next.js](https://nextjs.org/) and [React](https://react.dev/)
+- Real-time data by [Firebase](https://firebase.google.com/)
 - Icons by [Lucide](https://lucide.dev/)
 - PDF generation by [jsPDF](https://github.com/parallax/jsPDF)
+- QR codes by [qrcode.react](https://github.com/zpao/qrcode.react)
 - Inspired by SAFe Framework WSJF model
 
-## 📞 Support
-
-For questions or issues:
-- Check this README first
-- Review the inline tooltips in the app
-- Contact the development team
-
 ---
-
-**Made with ❤️ for Agile Teams**
 
 *Prioritize smarter, deliver faster.*

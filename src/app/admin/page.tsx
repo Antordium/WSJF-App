@@ -3,7 +3,8 @@
 import React, { useState, useEffect, useMemo, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { QRCodeSVG } from 'qrcode.react';
-import { Sun, Moon, Plus, Trash2, ChevronRight, ChevronDown, ChevronUp, Lock, Unlock, FileDown, FileText, Users, CheckCircle, ArrowRight, BarChart3, Eye, EyeOff } from 'lucide-react';
+import { Sun, Moon, Plus, Trash2, ChevronRight, ChevronDown, ChevronUp, Lock, Unlock, FileDown, FileText, Users, CheckCircle, ArrowRight, BarChart3, Eye, EyeOff, Upload } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { getTheme } from '../../lib/theme';
 import { ALL_PERSONAS, ALL_SERVICES, PERSONA_LABELS, SERVICE_LABELS, definitions, RANK_OPTIONS } from '../../lib/constants';
 import { calculateFeatureWSJF } from '../../lib/algorithm';
@@ -71,6 +72,8 @@ function AdminPageInner() {
 
   // Admin score entry state
   const [featureScores, setFeatureScores] = useState<Record<string, { rr: number; cr: number; sprints: number }>>({});
+  // Inline scoring: after locking votes, admin scores RR/CR/Sprints before advancing
+  const [inlineScoring, setInlineScoring] = useState<string | null>(null); // featureId being scored, or null
 
   // Results tab state
   const [activeTeamTab, setActiveTeamTab] = useState<string>('');
@@ -167,20 +170,60 @@ function AdminPageInner() {
     // Close current feature voting
     await setFeatureVotingOpen(sessionId, currentFeature.id, false);
 
+    // Initialize default scores for this feature if not already set
+    setFeatureScores(prev => ({
+      ...prev,
+      [currentFeature.id]: prev[currentFeature.id] || { rr: currentFeature.rr ?? 3, cr: currentFeature.cr ?? 1, sprints: currentFeature.sprints ?? 1 },
+    }));
+
+    // Show inline scoring form — admin enters RR/CR/Sprints while voters wait
+    setInlineScoring(currentFeature.id);
+  };
+
+  // After admin finishes inline scoring, save and advance to next feature (or results)
+  const handleInlineScoringDone = async () => {
+    if (!sessionId || !sessionMeta || !inlineScoring) return;
+    const scores = featureScores[inlineScoring] || { rr: 3, cr: 1, sprints: 1 };
+
+    // Save this feature's scores to Firebase immediately
+    await updateFeatureScores(sessionId, inlineScoring, scores.rr, scores.cr, scores.sprints);
+
+    setInlineScoring(null);
+
     const nextIndex = sessionMeta.currentFeatureIndex + 1;
     if (nextIndex < sortedFeatures.length) {
       // Advance to next feature
       await advanceFeature(sessionId, nextIndex);
       await setFeatureVotingOpen(sessionId, sortedFeatures[nextIndex].id, true);
     } else {
-      // All features voted — move to scoring phase
-      await setSessionStatus(sessionId, 'scoring');
-      // Initialize scores
-      const scores: Record<string, { rr: number; cr: number; sprints: number }> = {};
-      sortedFeatures.forEach(f => {
-        scores[f.id] = { rr: f.rr ?? 3, cr: f.cr ?? 1, sprints: f.sprints ?? 1 };
-      });
-      setFeatureScores(scores);
+      // All features voted AND scored — skip scoring phase, go straight to results
+      // Ensure all features have scores saved
+      for (const feature of sortedFeatures) {
+        const fScores = featureScores[feature.id] || { rr: 3, cr: 1, sprints: 1 };
+        await updateFeatureScores(sessionId, feature.id, fScores.rr, fScores.cr, fScores.sprints);
+      }
+
+      // Calculate WSJF for all features
+      const resultsMap: Record<string, FeatureResult> = {};
+      const resultsList: FeatureResult[] = [];
+
+      for (const feature of sortedFeatures) {
+        const fVotes = allVotes[feature.id] || {};
+        const fScores = featureScores[feature.id] || { rr: 3, cr: 1, sprints: 1 };
+        const featureWithScores = { ...feature, rr: fScores.rr, cr: fScores.cr, sprints: fScores.sprints };
+        const result = calculateFeatureWSJF(featureWithScores, fVotes, voters, weights);
+        resultsMap[feature.id] = result;
+        resultsList.push(result);
+      }
+
+      resultsList.sort((a, b) => b.wsjf - a.wsjf);
+      setResults(resultsList);
+
+      await saveResults(sessionId, resultsMap);
+      await setSessionStatus(sessionId, 'results');
+
+      const teams = [...new Set(resultsList.map(r => r.developerTeam))].sort();
+      if (teams.length > 0) setActiveTeamTab(teams[0]);
     }
   };
 
@@ -219,14 +262,14 @@ function AdminPageInner() {
 
   const handleExportCSV = () => {
     if (results.length === 0) return;
-    exportResultsCSV(results, sessionMeta?.title || 'WSJF Results');
+    exportResultsCSV(results, sessionMeta?.title || 'WSJF Results', voters);
   };
 
   const handleExportPDF = async () => {
     if (results.length === 0) return;
     setIsExporting(true);
     try {
-      await exportResultsPDF(results, sessionMeta?.title || 'WSJF Results', Object.keys(voters).length);
+      await exportResultsPDF(results, sessionMeta?.title || 'WSJF Results', voters);
     } finally {
       setIsExporting(false);
     }
@@ -243,6 +286,71 @@ function AdminPageInner() {
 
   const updateFeatureInput = (index: number, field: string, value: string) => {
     setFeatureInputs(prev => prev.map((f, i) => i === index ? { ...f, [field]: value } : f));
+  };
+
+  // CSV/Excel file upload handler
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const data = evt.target?.result;
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const rows: Record<string, string>[] = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+
+        if (rows.length === 0) {
+          alert('No data found in file. Ensure your file has at least one row of data.');
+          return;
+        }
+
+        // Map columns flexibly — match by header name (case-insensitive, partial match)
+        const headers = Object.keys(rows[0]);
+        const findCol = (keywords: string[]) =>
+          headers.find(h => keywords.some(k => h.toLowerCase().includes(k.toLowerCase())));
+
+        const nameCol = findCol(['feature', 'name', 'title', 'capability', 'epic', 'story']);
+        const jiraCol = findCol(['jira', 'ticket', 'issue', 'key', 'id']);
+        const teamCol = findCol(['team', 'developer', 'dev', 'squad', 'group']);
+        const problemCol = findCol(['problem', 'description', 'desc', 'summary', 'detail']);
+
+        if (!nameCol) {
+          alert(`Could not find a "Feature Name" column.\n\nDetected columns: ${headers.join(', ')}\n\nExpected a column containing one of: feature, name, title, capability, epic, story`);
+          return;
+        }
+
+        const parsed = rows
+          .map(row => ({
+            name: String(row[nameCol] || '').trim(),
+            jiraNumber: jiraCol ? String(row[jiraCol] || '').trim() : '',
+            developerTeam: teamCol ? String(row[teamCol] || '').trim() : '',
+            problemSolved: problemCol ? String(row[problemCol] || '').trim() : '',
+          }))
+          .filter(f => f.name); // Skip empty rows
+
+        if (parsed.length === 0) {
+          alert('No features with names found in the file.');
+          return;
+        }
+
+        // Append to existing features (remove empty placeholder rows first)
+        setFeatureInputs(prev => {
+          const existing = prev.filter(f => f.name.trim() || f.jiraNumber.trim() || f.developerTeam.trim());
+          return [...existing, ...parsed];
+        });
+
+        alert(`Imported ${parsed.length} features from "${file.name}"${jiraCol ? '' : '\n(No Jira column detected)'}${teamCol ? '' : '\n(No Team column detected)'}`);
+      } catch (err) {
+        console.error('File parse error:', err);
+        alert('Failed to parse file. Ensure it is a valid CSV or Excel file.');
+      }
+    };
+
+    reader.readAsArrayBuffer(file);
+    // Reset file input so same file can be re-uploaded
+    e.target.value = '';
   };
 
   // ===========================
@@ -345,7 +453,18 @@ function AdminPageInner() {
             <div style={{ marginBottom: '20px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                 <h3 style={{ fontSize: '16px', fontWeight: '600', color: theme.textPrimary, margin: 0 }}>Features ({featureInputs.filter(f => f.name.trim()).length})</h3>
-                <button onClick={addFeatureRow} style={{ ...buttonPrimary, padding: '6px 14px', fontSize: '13px' }}><Plus size={14} /> Add Feature</button>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <label style={{ ...buttonPrimary, padding: '6px 14px', fontSize: '13px', backgroundColor: '#8b5cf6' }}>
+                    <Upload size={14} /> Import CSV/Excel
+                    <input
+                      type="file"
+                      accept=".csv,.xlsx,.xls"
+                      onChange={handleFileUpload}
+                      style={{ display: 'none' }}
+                    />
+                  </label>
+                  <button onClick={addFeatureRow} style={{ ...buttonPrimary, padding: '6px 14px', fontSize: '13px' }}><Plus size={14} /> Add Feature</button>
+                </div>
               </div>
 
               {featureInputs.map((fi, index) => (
@@ -521,7 +640,7 @@ function AdminPageInner() {
           </div>
 
           {/* Current feature */}
-          {currentFeature && (
+          {currentFeature && !inlineScoring && (
             <div style={cardStyle}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
                 <div>
@@ -552,15 +671,84 @@ function AdminPageInner() {
               {/* Action button */}
               <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                 <button onClick={handleLockAndAdvance} style={buttonSuccess}>
-                  {sessionMeta.currentFeatureIndex + 1 < sortedFeatures.length ? (
-                    <><Lock size={16} /> Lock Votes & Next Feature</>
-                  ) : (
-                    <><Lock size={16} /> Lock Votes & Enter Scores</>
-                  )}
+                  <Lock size={16} /> Lock Votes & Score
                 </button>
               </div>
             </div>
           )}
+
+          {/* Inline admin scoring — shown after votes are locked, while voters wait */}
+          {inlineScoring && (() => {
+            const scoringFeature = sortedFeatures.find(f => f.id === inlineScoring);
+            const scores = featureScores[inlineScoring] || { rr: 3, cr: 1, sprints: 1 };
+            const isLastFeature = sessionMeta.currentFeatureIndex + 1 >= sortedFeatures.length;
+
+            return scoringFeature ? (
+              <div style={{ ...cardStyle, border: '2px solid #f59e0b' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#f59e0b', animation: 'pulse 1.5s ease-in-out infinite' }} />
+                  <span style={{ fontSize: '13px', fontWeight: '600', color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Voters are waiting — enter scores for this feature
+                  </span>
+                </div>
+
+                <h2 style={{ fontSize: '20px', fontWeight: '700', color: theme.textPrimary, margin: '0 0 4px 0' }}>{scoringFeature.name}</h2>
+                {scoringFeature.jiraNumber && <span style={{ color: '#60a5fa', fontSize: '14px', fontWeight: '500' }}>{scoringFeature.jiraNumber}</span>}
+                <span style={{ color: theme.textMuted, fontSize: '13px', marginLeft: '12px' }}>{scoringFeature.developerTeam}</span>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginTop: '20px' }}>
+                  {/* RR */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', color: theme.textMuted, marginBottom: '4px' }}>Risk Reduction (1-5)</label>
+                    <input
+                      type="range" min="1" max="5" value={scores.rr}
+                      onChange={e => setFeatureScores(prev => ({ ...prev, [inlineScoring]: { ...prev[inlineScoring], rr: parseInt(e.target.value) } }))}
+                      style={{ width: '100%', height: '6px', backgroundColor: theme.sliderBg, borderRadius: '4px', appearance: 'none', cursor: 'pointer' }}
+                    />
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: '12px', color: theme.textMuted }}>{definitions.rr[scores.rr]}</span>
+                      <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#60a5fa' }}>{scores.rr}</span>
+                    </div>
+                  </div>
+                  {/* CR */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', color: theme.textMuted, marginBottom: '4px' }}>Compliance/Regulatory (1-5)</label>
+                    <input
+                      type="range" min="1" max="5" value={scores.cr}
+                      onChange={e => setFeatureScores(prev => ({ ...prev, [inlineScoring]: { ...prev[inlineScoring], cr: parseInt(e.target.value) } }))}
+                      style={{ width: '100%', height: '6px', backgroundColor: theme.sliderBg, borderRadius: '4px', appearance: 'none', cursor: 'pointer' }}
+                    />
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: '12px', color: theme.textMuted }}>{definitions.cr[scores.cr]}</span>
+                      <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#60a5fa' }}>{scores.cr}</span>
+                    </div>
+                  </div>
+                  {/* Sprints */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', color: theme.textMuted, marginBottom: '4px' }}>Sprints (1-20)</label>
+                    <input
+                      type="range" min="1" max="20" value={scores.sprints}
+                      onChange={e => setFeatureScores(prev => ({ ...prev, [inlineScoring]: { ...prev[inlineScoring], sprints: parseInt(e.target.value) } }))}
+                      style={{ width: '100%', height: '6px', backgroundColor: theme.sliderBg, borderRadius: '4px', appearance: 'none', cursor: 'pointer' }}
+                    />
+                    <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                      <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#60a5fa' }}>{scores.sprints}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px' }}>
+                  <button onClick={handleInlineScoringDone} style={buttonSuccess}>
+                    {isLastFeature ? (
+                      <><BarChart3 size={16} /> Save & Show Results</>
+                    ) : (
+                      <><ArrowRight size={16} /> Save & Next Feature</>
+                    )}
+                  </button>
+                </div>
+              </div>
+            ) : null;
+          })()}
 
           {/* Scoring legend */}
           <div style={cardStyle}>
@@ -585,6 +773,12 @@ function AdminPageInner() {
             </div>
           </div>
         </div>
+
+        <style>{`
+          @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+          input[type="range"]::-webkit-slider-thumb { appearance: none; width: 18px; height: 18px; border-radius: 50%; background: #3b82f6; cursor: pointer; }
+          input[type="range"]::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; background: #3b82f6; cursor: pointer; border: none; }
+        `}</style>
       </div>
     );
   }
