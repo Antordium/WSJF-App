@@ -54,9 +54,9 @@ function VotePageInner() {
   const [lastName, setLastName] = useState('');
   const [firstName, setFirstName] = useState('');
 
-  // Voting state
-  const [bvScore, setBvScore] = useState(3);
-  const [tcScore, setTcScore] = useState(3);
+  // Voting state (mid-scale default on the 1-10 scale)
+  const [bvScore, setBvScore] = useState(5);
+  const [tcScore, setTcScore] = useState(5);
   const [hasVoted, setHasVoted] = useState(false);
   const [currentFeatureVotes, setCurrentFeatureVotes] = useState<Record<string, FeatureVote>>({});
 
@@ -96,8 +96,8 @@ function VotePageInner() {
   // Reset scores when the feature changes
   useEffect(() => {
     setHasVoted(false);
-    setBvScore(3);
-    setTcScore(3);
+    setBvScore(5);
+    setTcScore(5);
   }, [currentFeature?.id]);
 
   // Listen for votes on current feature to detect if we've already voted
@@ -410,13 +410,13 @@ function VotePageInner() {
                   <h3 style={{ fontSize: '16px', fontWeight: '600', color: theme.textPrimary, margin: 0 }}>Business Value (BV)</h3>
                   <span style={{ fontSize: '24px', fontWeight: 'bold', color: '#60a5fa' }}>{bvScore}</span>
                 </div>
-                <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
-                  {[1, 2, 3, 4, 5].map(score => (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '8px' }}>
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(score => (
                     <button
                       key={score}
                       onClick={() => setBvScore(score)}
                       style={{
-                        flex: 1, padding: '14px 0', borderRadius: '10px', border: 'none', cursor: 'pointer',
+                        flex: '1 0 16%', padding: '14px 0', borderRadius: '10px', border: 'none', cursor: 'pointer',
                         fontSize: '18px', fontWeight: '700', transition: 'all 150ms ease',
                         backgroundColor: bvScore === score ? '#3b82f6' : theme.sliderBg,
                         color: bvScore === score ? 'white' : theme.textPrimary,
@@ -438,13 +438,13 @@ function VotePageInner() {
                   <h3 style={{ fontSize: '16px', fontWeight: '600', color: theme.textPrimary, margin: 0 }}>Time Criticality (TC)</h3>
                   <span style={{ fontSize: '24px', fontWeight: 'bold', color: '#f59e0b' }}>{tcScore}</span>
                 </div>
-                <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
-                  {[1, 2, 3, 4, 5].map(score => (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '8px' }}>
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(score => (
                     <button
                       key={score}
                       onClick={() => setTcScore(score)}
                       style={{
-                        flex: 1, padding: '14px 0', borderRadius: '10px', border: 'none', cursor: 'pointer',
+                        flex: '1 0 16%', padding: '14px 0', borderRadius: '10px', border: 'none', cursor: 'pointer',
                         fontSize: '18px', fontWeight: '700', transition: 'all 150ms ease',
                         backgroundColor: tcScore === score ? '#f59e0b' : theme.sliderBg,
                         color: tcScore === score ? 'white' : theme.textPrimary,

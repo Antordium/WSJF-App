@@ -1,5 +1,5 @@
 import type { Vote, SignalStrengthBreakdown, SignalStrengthResult, VoterProfile, FeatureVote, FeatureResult, Feature, Weights } from './types';
-import { PERSONA_WEIGHTS, SIGNAL_STRENGTH_CAP, DEFAULT_SCORE } from './constants';
+import { PERSONA_WEIGHTS, SIGNAL_STRENGTH_CAP, DEFAULT_SCORE, DEFAULT_SPRINT_ALPHA, ARCHITECTURE_BV_FLOOR } from './constants';
 import type { PersonaType } from './types';
 
 // ===========================
@@ -126,14 +126,19 @@ export function buildVotesForSignalStrength(
 
 /**
  * Calculate full WSJF result for a single feature.
- * Architecture features: BV=1 fixed, TC from admin (feature.tc), no voter signal strength.
+ * Architecture features: BV fixed at ARCHITECTURE_BV_FLOOR, TC from admin (feature.tc), no voter signal strength.
  * User-facing features: BV and TC from voter signal strength algorithm.
+ *
+ * `alpha` dampens the influence of sprint count: WSJF = CoD / sprints^alpha
+ * (0.5 = square root, the default). This stops a low sprint estimate from
+ * disproportionately inflating priority.
  */
 export function calculateFeatureWSJF(
   feature: Feature,
   featureVotes: Record<string, FeatureVote>,
   voterProfiles: Record<string, VoterProfile>,
   weights: Weights,
+  alpha: number = DEFAULT_SPRINT_ALPHA,
 ): FeatureResult {
   const isArchitecture = (feature.featureType || 'user') === 'architecture';
 
@@ -151,8 +156,8 @@ export function calculateFeatureWSJF(
   let tcVotes: Vote[] = [];
 
   if (isArchitecture) {
-    bvResult = { ...noSignal, adjustedScore: 1.0, breakdown: { ...noSignal.breakdown, weightedAverage: 1.0 } };
-    const adminTC = feature.tc ?? 3;
+    bvResult = { ...noSignal, adjustedScore: ARCHITECTURE_BV_FLOOR, breakdown: { ...noSignal.breakdown, weightedAverage: ARCHITECTURE_BV_FLOOR } };
+    const adminTC = feature.tc ?? DEFAULT_SCORE;
     tcResult = { ...noSignal, adjustedScore: adminTC, breakdown: { ...noSignal.breakdown, weightedAverage: adminTC } };
   } else {
     bvVotes = buildVotesForSignalStrength(featureVotes, voterProfiles, fv => fv.bv);
@@ -161,7 +166,7 @@ export function calculateFeatureWSJF(
     tcResult = calculateSignalStrength(tcVotes);
   }
 
-  const rr = feature.rr ?? 3;
+  const rr = feature.rr ?? DEFAULT_SCORE;
   const cr = feature.cr ?? 1;
   const sprints = feature.sprints ?? 1;
 
@@ -171,7 +176,7 @@ export function calculateFeatureWSJF(
     rr * weights.rr +
     cr * weights.cr;
 
-  const wsjf = costOfDelay / (sprints > 0 ? sprints : 1);
+  const wsjf = costOfDelay / Math.pow(sprints > 0 ? sprints : 1, alpha);
 
   const uniqueServices = new Set(bvVotes.map(v => v.service)).size;
   const uniquePersonas = new Set(bvVotes.map(v => v.persona)).size;
@@ -188,10 +193,10 @@ export function calculateFeatureWSJF(
     voteCount: isArchitecture ? 0 : Object.keys(featureVotes).length,
     uniqueServices,
     uniquePersonas,
-    rawBVAvg: isArchitecture ? 1.0 : rawBVAvg,
+    rawBVAvg: isArchitecture ? ARCHITECTURE_BV_FLOOR : rawBVAvg,
     bvSignalStrength: bvResult.signalStrength,
     adjustedBV: bvResult.adjustedScore,
-    rawTCAvg: isArchitecture ? (feature.tc ?? 3) : rawTCAvg,
+    rawTCAvg: isArchitecture ? (feature.tc ?? DEFAULT_SCORE) : rawTCAvg,
     tcSignalStrength: tcResult.signalStrength,
     adjustedTC: tcResult.adjustedScore,
     rr,
