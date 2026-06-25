@@ -157,7 +157,7 @@ export function calculateFeatureWSJF(
 
   if (isArchitecture) {
     bvResult = { ...noSignal, adjustedScore: ARCHITECTURE_BV_FLOOR, breakdown: { ...noSignal.breakdown, weightedAverage: ARCHITECTURE_BV_FLOOR } };
-    const adminTC = feature.tc ?? 3;
+    const adminTC = feature.tc ?? DEFAULT_SCORE;
     tcResult = { ...noSignal, adjustedScore: adminTC, breakdown: { ...noSignal.breakdown, weightedAverage: adminTC } };
   } else {
     bvVotes = buildVotesForSignalStrength(featureVotes, voterProfiles, fv => fv.bv);
@@ -166,7 +166,7 @@ export function calculateFeatureWSJF(
     tcResult = calculateSignalStrength(tcVotes);
   }
 
-  const rr = feature.rr ?? 3;
+  const rr = feature.rr ?? DEFAULT_SCORE;
   const cr = feature.cr ?? 1;
   const sprints = feature.sprints ?? 1;
 
@@ -196,7 +196,7 @@ export function calculateFeatureWSJF(
     rawBVAvg: isArchitecture ? ARCHITECTURE_BV_FLOOR : rawBVAvg,
     bvSignalStrength: bvResult.signalStrength,
     adjustedBV: bvResult.adjustedScore,
-    rawTCAvg: isArchitecture ? (feature.tc ?? 3) : rawTCAvg,
+    rawTCAvg: isArchitecture ? (feature.tc ?? DEFAULT_SCORE) : rawTCAvg,
     tcSignalStrength: tcResult.signalStrength,
     adjustedTC: tcResult.adjustedScore,
     rr,

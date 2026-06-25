@@ -43,7 +43,10 @@ export const ALL_SERVICES: ServiceType[] = [
 ];
 
 export const SIGNAL_STRENGTH_CAP = 2.0;
-export const DEFAULT_SCORE = 3;
+// Neutral mid-scale default (no-vote fallback / initial slider position) on the 1-10 scale.
+export const DEFAULT_SCORE = 5;
+// Max value of the BV/TC/RR/CR scoring scale (sprints are separate, 1-20).
+export const SCORE_MAX = 10;
 
 // ===========================
 // WSJF SCORING TUNABLES
@@ -54,10 +57,10 @@ export const DEFAULT_SCORE = 3;
 // claiming 1 vs 4 sprints gets a 2x edge instead of 4x), 0 = ignore sprints entirely.
 export const DEFAULT_SPRINT_ALPHA = 0.5;
 
-// Architecture features have no voter Business Value; they get this fixed mid-scale
-// BV (instead of the 1.0 floor) so risk/architecture work isn't auto-bottomed vs.
-// voted user-facing features.
-export const ARCHITECTURE_BV_FLOOR = 3;
+// Architecture features have no voter Business Value; they get this fixed mid-high
+// BV on the 1-10 scale (instead of the floor) so risk/architecture work isn't
+// auto-bottomed vs. voted user-facing features.
+export const ARCHITECTURE_BV_FLOOR = 6;
 
 // Default Cost-of-Delay weights. BV stays highest, but RR is raised toward it
 // (and CR kept low) to reduce the Business-Value vs. Risk-Reduction disparity.
@@ -67,34 +70,56 @@ export const DEFAULT_WEIGHTS = { bv: 3, tc: 2, rr: 2.5, cr: 1 };
 // SCORING DEFINITIONS
 // ===========================
 
+// 1-10 scoring scale. Descriptions ramp from negligible (1) to transformational/
+// critical (10) for each dimension.
 export const definitions = {
   bv: {
-    1: 'Minimal user benefit; purely technical or internal.',
-    2: 'Small improvement; affects a limited group or edge case.',
-    3: 'Moderate value; addresses a common user need.',
-    4: 'High value; significant impact on mission readiness.',
-    5: 'Major value; transforms user capability or removes critical blocker.'
+    1: 'Negligible user benefit; purely internal or technical.',
+    2: 'Very small benefit; rare edge case.',
+    3: 'Minor benefit; affects a limited group.',
+    4: 'Modest benefit; helps some users.',
+    5: 'Moderate value; addresses a common user need.',
+    6: 'Solid value; clear improvement for many users.',
+    7: 'High value; significant impact on mission readiness.',
+    8: 'Very high value; major capability improvement.',
+    9: 'Critical value; removes a major blocker.',
+    10: 'Transformational; redefines user capability.'
   } as Record<number, string>,
   tc: {
     1: 'No time pressure; do anytime.',
-    2: 'Some urgency; within the next few PIs.',
-    3: 'Moderate criticality; within 1-2 PIs.',
-    4: 'Urgent; must deliver this PI or face impact.',
-    5: 'Severe criticality; miss this PI = mission failure or penalty.'
+    2: 'Minimal urgency.',
+    3: 'Low urgency; within the next few PIs.',
+    4: 'Some urgency.',
+    5: 'Moderate criticality; within 1-2 PIs.',
+    6: 'Elevated; this or next PI preferred.',
+    7: 'Urgent; should deliver this PI.',
+    8: 'Very urgent; notable impact if delayed.',
+    9: 'Severe; major impact if missed.',
+    10: 'Critical; miss this PI = mission failure or penalty.'
   } as Record<number, string>,
   rr: {
     1: 'No risk mitigation; does not affect reliability.',
-    2: 'Minor risk reduction; addresses low-probability issues.',
-    3: 'Moderate risk reduction; improves system stability.',
-    4: 'High risk reduction; prevents major outage scenario.',
-    5: 'Prevents high-impact failure; eliminates existential risk.'
+    2: 'Negligible risk reduction.',
+    3: 'Minor risk reduction; low-probability issues.',
+    4: 'Some stability improvement.',
+    5: 'Moderate risk reduction; improves system stability.',
+    6: 'Notable risk reduction.',
+    7: 'High risk reduction; prevents significant issues.',
+    8: 'Very high; prevents a major outage scenario.',
+    9: 'Mitigates severe risk.',
+    10: 'Eliminates existential / high-impact failure.'
   } as Record<number, string>,
   cr: {
     1: 'No compliance requirement.',
-    2: 'Internal policy alignment; nice to have.',
-    3: 'Recommended by audit; should address.',
-    4: 'Required by regulation or SLA within defined timeline.',
-    5: 'Mandated by law, DoD directive, or immediate SLA breach risk.'
+    2: 'Minimal internal interest.',
+    3: 'Internal policy alignment; nice to have.',
+    4: 'Recommended internally.',
+    5: 'Recommended by audit; should address.',
+    6: 'Expected by audit or policy.',
+    7: 'Required by regulation or SLA (future timeline).',
+    8: 'Required soon; defined timeline.',
+    9: 'Near-term mandate or SLA breach risk.',
+    10: 'Mandated by law, DoD directive, or immediate SLA breach risk.'
   } as Record<number, string>,
 };
 

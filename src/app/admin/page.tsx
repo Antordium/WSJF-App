@@ -110,7 +110,7 @@ function AdminPageInner() {
     if (currentFeature && (currentFeature.featureType || 'user') === 'architecture' && !featureScores[currentFeature.id]) {
       setFeatureScores(prev => ({
         ...prev,
-        [currentFeature.id]: { tc: 3, rr: 3, cr: 1, sprints: 1 },
+        [currentFeature.id]: { tc: 5, rr: 5, cr: 1, sprints: 1 },
       }));
     }
   }, [currentFeature]);
@@ -197,7 +197,7 @@ function AdminPageInner() {
   // --- Architecture feature: admin saves all scores and advances ---
   const handleArchitectureSave = async () => {
     if (!sessionId || !sessionMeta || !currentFeature) return;
-    const scores = featureScores[currentFeature.id] || { tc: 3, rr: 3, cr: 1, sprints: 1 };
+    const scores = featureScores[currentFeature.id] || { tc: 5, rr: 5, cr: 1, sprints: 1 };
 
     // Close feature and save scores (including admin TC)
     await setFeatureVotingOpen(sessionId, currentFeature.id, false);
@@ -222,7 +222,7 @@ function AdminPageInner() {
     // Initialize default scores for this feature if not already set
     setFeatureScores(prev => ({
       ...prev,
-      [currentFeature.id]: prev[currentFeature.id] || { tc: 3, rr: currentFeature.rr ?? 3, cr: currentFeature.cr ?? 1, sprints: currentFeature.sprints ?? 1 },
+      [currentFeature.id]: prev[currentFeature.id] || { tc: 5, rr: currentFeature.rr ?? 5, cr: currentFeature.cr ?? 1, sprints: currentFeature.sprints ?? 1 },
     }));
 
     // Show inline scoring form — admin enters RR/CR/Sprints while voters wait
@@ -232,7 +232,7 @@ function AdminPageInner() {
   // After admin finishes inline scoring, save and advance to next feature (or results)
   const handleInlineScoringDone = async () => {
     if (!sessionId || !sessionMeta || !inlineScoring) return;
-    const scores = featureScores[inlineScoring] || { tc: 3, rr: 3, cr: 1, sprints: 1 };
+    const scores = featureScores[inlineScoring] || { tc: 5, rr: 5, cr: 1, sprints: 1 };
 
     // Save this feature's scores to Firebase immediately
     await updateFeatureScores(sessionId, inlineScoring, scores.rr, scores.cr, scores.sprints);
@@ -256,7 +256,7 @@ function AdminPageInner() {
 
     // Ensure all features have scores saved
     for (const feature of sortedFeatures) {
-      const fScores = featureScores[feature.id] || { tc: 3, rr: 3, cr: 1, sprints: 1 };
+      const fScores = featureScores[feature.id] || { tc: 5, rr: 5, cr: 1, sprints: 1 };
       if ((feature.featureType || 'user') === 'architecture') {
         await updateFeatureScores(sessionId, feature.id, fScores.rr, fScores.cr, fScores.sprints, fScores.tc);
       } else {
@@ -270,7 +270,7 @@ function AdminPageInner() {
 
     for (const feature of sortedFeatures) {
       const fVotes = allVotes[feature.id] || {};
-      const fScores = featureScores[feature.id] || { tc: 3, rr: 3, cr: 1, sprints: 1 };
+      const fScores = featureScores[feature.id] || { tc: 5, rr: 5, cr: 1, sprints: 1 };
       const featureWithScores = {
         ...feature,
         tc: (feature.featureType || 'user') === 'architecture' ? fScores.tc : feature.tc,
@@ -343,7 +343,7 @@ function AdminPageInner() {
 
     for (const feature of sortedFeatures) {
       const fVotes = allVotes[feature.id] || {};
-      const scores = featureScores[feature.id] || { tc: 3, rr: 3, cr: 1, sprints: 1 };
+      const scores = featureScores[feature.id] || { tc: 5, rr: 5, cr: 1, sprints: 1 };
       const featureWithScores = {
         ...feature,
         tc: (feature.featureType || 'user') === 'architecture' ? scores.tc : feature.tc,
@@ -819,7 +819,7 @@ function AdminPageInner() {
 
           {/* ============ ARCHITECTURE FEATURE: Admin sliders (no voters) ============ */}
           {currentFeature && isArchFeature && !inlineScoring && (() => {
-            const scores = featureScores[currentFeature.id] || { tc: 3, rr: 3, cr: 1, sprints: 1 };
+            const scores = featureScores[currentFeature.id] || { tc: 5, rr: 5, cr: 1, sprints: 1 };
             return (
               <div style={{ ...cardStyle, border: '2px solid #7c3aed' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
@@ -852,9 +852,9 @@ function AdminPageInner() {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
                   {/* TC */}
                   <div>
-                    <label style={{ display: 'block', fontSize: '12px', color: theme.textMuted, marginBottom: '4px' }}>Time Criticality (1-5)</label>
+                    <label style={{ display: 'block', fontSize: '12px', color: theme.textMuted, marginBottom: '4px' }}>Time Criticality (1-10)</label>
                     <input
-                      type="range" min="1" max="5" value={scores.tc}
+                      type="range" min="1" max="10" value={scores.tc}
                       onChange={e => setFeatureScores(prev => ({ ...prev, [currentFeature.id]: { ...prev[currentFeature.id], tc: parseInt(e.target.value) } }))}
                       style={{ width: '100%', height: '6px', backgroundColor: theme.sliderBg, borderRadius: '4px', appearance: 'none', cursor: 'pointer' }}
                     />
@@ -865,9 +865,9 @@ function AdminPageInner() {
                   </div>
                   {/* RR */}
                   <div>
-                    <label style={{ display: 'block', fontSize: '12px', color: theme.textMuted, marginBottom: '4px' }}>Risk Reduction (1-5)</label>
+                    <label style={{ display: 'block', fontSize: '12px', color: theme.textMuted, marginBottom: '4px' }}>Risk Reduction (1-10)</label>
                     <input
-                      type="range" min="1" max="5" value={scores.rr}
+                      type="range" min="1" max="10" value={scores.rr}
                       onChange={e => setFeatureScores(prev => ({ ...prev, [currentFeature.id]: { ...prev[currentFeature.id], rr: parseInt(e.target.value) } }))}
                       style={{ width: '100%', height: '6px', backgroundColor: theme.sliderBg, borderRadius: '4px', appearance: 'none', cursor: 'pointer' }}
                     />
@@ -878,9 +878,9 @@ function AdminPageInner() {
                   </div>
                   {/* CR */}
                   <div>
-                    <label style={{ display: 'block', fontSize: '12px', color: theme.textMuted, marginBottom: '4px' }}>Compliance/Regulatory (1-5)</label>
+                    <label style={{ display: 'block', fontSize: '12px', color: theme.textMuted, marginBottom: '4px' }}>Compliance/Regulatory (1-10)</label>
                     <input
-                      type="range" min="1" max="5" value={scores.cr}
+                      type="range" min="1" max="10" value={scores.cr}
                       onChange={e => setFeatureScores(prev => ({ ...prev, [currentFeature.id]: { ...prev[currentFeature.id], cr: parseInt(e.target.value) } }))}
                       style={{ width: '100%', height: '6px', backgroundColor: theme.sliderBg, borderRadius: '4px', appearance: 'none', cursor: 'pointer' }}
                     />
@@ -1020,7 +1020,7 @@ function AdminPageInner() {
           {/* Inline admin scoring — shown after votes are locked for user-facing features */}
           {inlineScoring && (() => {
             const scoringFeature = sortedFeatures.find(f => f.id === inlineScoring);
-            const scores = featureScores[inlineScoring] || { tc: 3, rr: 3, cr: 1, sprints: 1 };
+            const scores = featureScores[inlineScoring] || { tc: 5, rr: 5, cr: 1, sprints: 1 };
             const isLastFeature = sessionMeta.currentFeatureIndex + 1 >= sortedFeatures.length;
 
             return scoringFeature ? (
@@ -1039,9 +1039,9 @@ function AdminPageInner() {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginTop: '20px' }}>
                   {/* RR */}
                   <div>
-                    <label style={{ display: 'block', fontSize: '12px', color: theme.textMuted, marginBottom: '4px' }}>Risk Reduction (1-5)</label>
+                    <label style={{ display: 'block', fontSize: '12px', color: theme.textMuted, marginBottom: '4px' }}>Risk Reduction (1-10)</label>
                     <input
-                      type="range" min="1" max="5" value={scores.rr}
+                      type="range" min="1" max="10" value={scores.rr}
                       onChange={e => setFeatureScores(prev => ({ ...prev, [inlineScoring]: { ...prev[inlineScoring], rr: parseInt(e.target.value) } }))}
                       style={{ width: '100%', height: '6px', backgroundColor: theme.sliderBg, borderRadius: '4px', appearance: 'none', cursor: 'pointer' }}
                     />
@@ -1052,9 +1052,9 @@ function AdminPageInner() {
                   </div>
                   {/* CR */}
                   <div>
-                    <label style={{ display: 'block', fontSize: '12px', color: theme.textMuted, marginBottom: '4px' }}>Compliance/Regulatory (1-5)</label>
+                    <label style={{ display: 'block', fontSize: '12px', color: theme.textMuted, marginBottom: '4px' }}>Compliance/Regulatory (1-10)</label>
                     <input
-                      type="range" min="1" max="5" value={scores.cr}
+                      type="range" min="1" max="10" value={scores.cr}
                       onChange={e => setFeatureScores(prev => ({ ...prev, [inlineScoring]: { ...prev[inlineScoring], cr: parseInt(e.target.value) } }))}
                       style={{ width: '100%', height: '6px', backgroundColor: theme.sliderBg, borderRadius: '4px', appearance: 'none', cursor: 'pointer' }}
                     />
@@ -1161,7 +1161,7 @@ function AdminPageInner() {
           </div>
 
           {sortedFeatures.map((feature, i) => {
-            const scores = featureScores[feature.id] || { tc: 3, rr: 3, cr: 1, sprints: 1 };
+            const scores = featureScores[feature.id] || { tc: 5, rr: 5, cr: 1, sprints: 1 };
             const fVotes = allVotes[feature.id] || {};
             const voteCount = Object.keys(fVotes).length;
 
@@ -1181,9 +1181,9 @@ function AdminPageInner() {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
                   {/* RR */}
                   <div>
-                    <label style={{ display: 'block', fontSize: '12px', color: theme.textMuted, marginBottom: '4px' }}>Risk Reduction (1-5)</label>
+                    <label style={{ display: 'block', fontSize: '12px', color: theme.textMuted, marginBottom: '4px' }}>Risk Reduction (1-10)</label>
                     <input
-                      type="range" min="1" max="5" value={scores.rr}
+                      type="range" min="1" max="10" value={scores.rr}
                       onChange={e => setFeatureScores(prev => ({ ...prev, [feature.id]: { ...prev[feature.id], rr: parseInt(e.target.value) } }))}
                       style={{ width: '100%', height: '6px', backgroundColor: theme.sliderBg, borderRadius: '4px', appearance: 'none', cursor: 'pointer' }}
                     />
@@ -1194,9 +1194,9 @@ function AdminPageInner() {
                   </div>
                   {/* CR */}
                   <div>
-                    <label style={{ display: 'block', fontSize: '12px', color: theme.textMuted, marginBottom: '4px' }}>Compliance/Regulatory (1-5)</label>
+                    <label style={{ display: 'block', fontSize: '12px', color: theme.textMuted, marginBottom: '4px' }}>Compliance/Regulatory (1-10)</label>
                     <input
-                      type="range" min="1" max="5" value={scores.cr}
+                      type="range" min="1" max="10" value={scores.cr}
                       onChange={e => setFeatureScores(prev => ({ ...prev, [feature.id]: { ...prev[feature.id], cr: parseInt(e.target.value) } }))}
                       style={{ width: '100%', height: '6px', backgroundColor: theme.sliderBg, borderRadius: '4px', appearance: 'none', cursor: 'pointer' }}
                     />
