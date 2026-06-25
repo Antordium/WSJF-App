@@ -50,9 +50,15 @@ function getDb() {
 // ===========================
 // ANONYMOUS AUTH
 // ===========================
-// All writes require an authenticated (anonymous) user so the database rules can
-// gate writes on `auth != null`. Reads stay public per the rules. The sign-in
-// promise is cached so we only authenticate once per session.
+// Writes are gated on an anonymous sign-in so the database rules can require
+// `auth != null`. Reads stay public per the rules. The sign-in promise is cached
+// so we authenticate once per session.
+//
+// This is best-effort: if sign-in fails (e.g. Anonymous auth not yet enabled in
+// the Firebase console, or transient/offline), we resolve anyway rather than
+// blocking the write — the database rules remain the real security gate, and the
+// write will simply be rejected if the rules require auth. We reset the cache on
+// failure so the next call retries the sign-in.
 
 let authReady: Promise<void> | null = null;
 
@@ -65,9 +71,9 @@ export function ensureAuth(): Promise<void> {
       : signInAnonymously(auth)
           .then(() => {})
           .catch((e) => {
-            // Allow a retry on the next call if sign-in failed (e.g. transient/offline).
+            // Best-effort: log, reset cache to retry next time, and resolve.
+            console.warn('Anonymous sign-in failed (continuing; DB rules still apply):', e);
             authReady = null;
-            throw e;
           });
   }
   return authReady;
