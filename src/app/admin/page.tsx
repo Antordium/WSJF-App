@@ -6,7 +6,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { Sun, Moon, Plus, Trash2, ChevronRight, ChevronDown, ChevronUp, Lock, Unlock, FileDown, FileText, Users, CheckCircle, ArrowRight, BarChart3, Eye, EyeOff, Upload } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { getTheme } from '../../lib/theme';
-import { ALL_PERSONAS, ALL_SERVICES, PERSONA_LABELS, SERVICE_LABELS, definitions, RANK_OPTIONS } from '../../lib/constants';
+import { ALL_PERSONAS, ALL_SERVICES, PERSONA_LABELS, SERVICE_LABELS, definitions, RANK_OPTIONS, DEFAULT_WEIGHTS, DEFAULT_SPRINT_ALPHA, ARCHITECTURE_BV_FLOOR } from '../../lib/constants';
 import { calculateFeatureWSJF } from '../../lib/algorithm';
 import { exportResultsCSV, exportResultsPDF } from '../../lib/export-utils';
 import type { Feature, FeatureType, VoterProfile, FeatureVote, FeatureResult, SessionMeta, SessionStatus, Weights } from '../../lib/types';
@@ -18,6 +18,7 @@ import {
   setFeatureVotingOpen,
   updateFeatureScores,
   saveResults,
+  saveScoringConfig,
   resetUserFeatureVoting,
   listenToSessionMeta,
   listenToFeatures,
@@ -62,8 +63,11 @@ function AdminPageInner() {
   const [voters, setVoters] = useState<Record<string, VoterProfile>>({});
   const [allVotes, setAllVotes] = useState<Record<string, Record<string, FeatureVote>>>({});
   const [results, setResults] = useState<FeatureResult[]>([]);
-  const [weights, setWeights] = useState<Weights>({ bv: 1, tc: 1, rr: 1, cr: 1 });
+  const [weights, setWeights] = useState<Weights>({ ...DEFAULT_WEIGHTS });
+  // Sprint dampening exponent: WSJF = CoD / sprints^alpha (0.5 = square root)
+  const [alpha, setAlpha] = useState<number>(DEFAULT_SPRINT_ALPHA);
   const [isExporting, setIsExporting] = useState(false);
+  const [isRecalculating, setIsRecalculating] = useState(false);
 
   // Creation form state
   const [sessionTitle, setSessionTitle] = useState('');
@@ -274,7 +278,7 @@ function AdminPageInner() {
         cr: fScores.cr,
         sprints: fScores.sprints,
       };
-      const result = calculateFeatureWSJF(featureWithScores, fVotes, voters, weights);
+      const result = calculateFeatureWSJF(featureWithScores, fVotes, voters, weights, alpha);
       resultsMap[feature.id] = result;
       resultsList.push(result);
     }
@@ -283,6 +287,7 @@ function AdminPageInner() {
     setResults(resultsList);
 
     await saveResults(sessionId, resultsMap);
+    await saveScoringConfig(sessionId, { weights, alpha });
     await setSessionStatus(sessionId, 'results');
 
     setActiveTeamTab('All');
@@ -346,7 +351,7 @@ function AdminPageInner() {
         cr: scores.cr,
         sprints: scores.sprints,
       };
-      const result = calculateFeatureWSJF(featureWithScores, fVotes, voters, weights);
+      const result = calculateFeatureWSJF(featureWithScores, fVotes, voters, weights, alpha);
       resultsMap[feature.id] = result;
       resultsList.push(result);
     }
@@ -356,9 +361,34 @@ function AdminPageInner() {
 
     // Save to Firebase and transition to results
     await saveResults(sessionId, resultsMap);
+    await saveScoringConfig(sessionId, { weights, alpha });
     await setSessionStatus(sessionId, 'results');
 
     setActiveTeamTab('All');
+  };
+
+  // Recalculate WSJF from the already-persisted feature scores using the current
+  // weights + alpha (used by the live tuning panel on the Results view). Reads
+  // scores from `features` (synced from Firebase) rather than local form state.
+  const handleRecalculate = async () => {
+    if (!sessionId) return;
+    setIsRecalculating(true);
+    try {
+      const resultsMap: Record<string, FeatureResult> = {};
+      const resultsList: FeatureResult[] = [];
+      for (const feature of sortedFeatures) {
+        const fVotes = allVotes[feature.id] || {};
+        const result = calculateFeatureWSJF(feature, fVotes, voters, weights, alpha);
+        resultsMap[feature.id] = result;
+        resultsList.push(result);
+      }
+      resultsList.sort((a, b) => b.wsjf - a.wsjf);
+      setResults(resultsList);
+      await saveResults(sessionId, resultsMap);
+      await saveScoringConfig(sessionId, { weights, alpha });
+    } finally {
+      setIsRecalculating(false);
+    }
   };
 
   const handleExportCSV = () => {
@@ -814,9 +844,9 @@ function AdminPageInner() {
                 <div style={{ marginTop: '20px', marginBottom: '16px', padding: '12px', backgroundColor: 'rgba(124, 58, 237, 0.1)', borderRadius: '8px', border: '1px solid rgba(124, 58, 237, 0.3)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: '14px', fontWeight: '600', color: '#a78bfa' }}>Business Value (BV)</span>
-                    <span style={{ fontSize: '20px', fontWeight: 'bold', color: '#a78bfa' }}>1</span>
+                    <span style={{ fontSize: '20px', fontWeight: 'bold', color: '#a78bfa' }}>{ARCHITECTURE_BV_FLOOR}</span>
                   </div>
-                  <p style={{ fontSize: '12px', color: theme.textMuted, margin: '4px 0 0 0' }}>Architecture items have a fixed BV of 1.</p>
+                  <p style={{ fontSize: '12px', color: theme.textMuted, margin: '4px 0 0 0' }}>Architecture items have a fixed BV of {ARCHITECTURE_BV_FLOOR} (no voter participation).</p>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
@@ -1120,8 +1150,8 @@ function AdminPageInner() {
                 <div key={key}>
                   <label style={{ display: 'block', fontSize: '12px', color: theme.textMuted, marginBottom: '4px' }}>{key.toUpperCase()} Weight</label>
                   <input
-                    type="range" min="1" max="10" value={weights[key]}
-                    onChange={e => setWeights(prev => ({ ...prev, [key]: parseInt(e.target.value) }))}
+                    type="range" min="0" max="10" step="0.5" value={weights[key]}
+                    onChange={e => setWeights(prev => ({ ...prev, [key]: parseFloat(e.target.value) }))}
                     style={{ width: '100%', height: '6px', backgroundColor: theme.sliderBg, borderRadius: '4px', appearance: 'none', cursor: 'pointer' }}
                   />
                   <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#60a5fa' }}>{weights[key]}</span>
@@ -1257,6 +1287,41 @@ function AdminPageInner() {
             <button onClick={handleResetUserFeatures} style={buttonDanger}>
               Reset User Features
             </button>
+          </div>
+
+          {/* Scoring controls — tune Cost-of-Delay weights and sprint sensitivity, then recalculate */}
+          <div style={cardStyle}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: '600', color: theme.textPrimary, margin: 0 }}>Scoring Controls</h3>
+              <button onClick={handleRecalculate} disabled={isRecalculating} style={{ ...buttonPrimary, opacity: isRecalculating ? 0.5 : 1 }}>
+                <BarChart3 size={16} /> {isRecalculating ? 'Recalculating…' : 'Recalculate WSJF'}
+              </button>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '16px' }}>
+              {(['bv', 'tc', 'rr', 'cr'] as const).map(key => (
+                <div key={key}>
+                  <label style={{ display: 'block', fontSize: '12px', color: theme.textMuted, marginBottom: '4px' }}>{key.toUpperCase()} Weight</label>
+                  <input
+                    type="range" min="0" max="10" step="0.5" value={weights[key]}
+                    onChange={e => setWeights(prev => ({ ...prev, [key]: parseFloat(e.target.value) }))}
+                    style={{ width: '100%', height: '6px', backgroundColor: theme.sliderBg, borderRadius: '4px', appearance: 'none', cursor: 'pointer' }}
+                  />
+                  <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#60a5fa' }}>{weights[key]}</span>
+                </div>
+              ))}
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', color: theme.textMuted, marginBottom: '4px' }}>Sprint Sensitivity (α)</label>
+                <input
+                  type="range" min="0" max="1" step="0.05" value={alpha}
+                  onChange={e => setAlpha(parseFloat(e.target.value))}
+                  style={{ width: '100%', height: '6px', backgroundColor: theme.sliderBg, borderRadius: '4px', appearance: 'none', cursor: 'pointer' }}
+                />
+                <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#60a5fa' }}>{alpha.toFixed(2)}</span>
+              </div>
+            </div>
+            <p style={{ fontSize: '12px', color: theme.textMuted, margin: '12px 0 0 0' }}>
+              WSJF = Cost of Delay ÷ sprints<sup>α</sup>. α = 0 ignores sprint count · 0.5 = square root (recommended, limits sprint-count gaming) · 1 = classic WSJF. Raise the RR weight to give risk-reduction/architecture more parity with Business Value.
+            </p>
           </div>
 
           {/* Team tabs */}

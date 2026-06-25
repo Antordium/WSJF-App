@@ -46,6 +46,24 @@ export const SIGNAL_STRENGTH_CAP = 2.0;
 export const DEFAULT_SCORE = 3;
 
 // ===========================
+// WSJF SCORING TUNABLES
+// ===========================
+
+// Sprint dampening exponent for WSJF = CoD / sprints^alpha.
+// 1 = classic WSJF (linear), 0.5 = square-root dampening (recommended — a vendor
+// claiming 1 vs 4 sprints gets a 2x edge instead of 4x), 0 = ignore sprints entirely.
+export const DEFAULT_SPRINT_ALPHA = 0.5;
+
+// Architecture features have no voter Business Value; they get this fixed mid-scale
+// BV (instead of the 1.0 floor) so risk/architecture work isn't auto-bottomed vs.
+// voted user-facing features.
+export const ARCHITECTURE_BV_FLOOR = 3;
+
+// Default Cost-of-Delay weights. BV stays highest, but RR is raised toward it
+// (and CR kept low) to reduce the Business-Value vs. Risk-Reduction disparity.
+export const DEFAULT_WEIGHTS = { bv: 3, tc: 2, rr: 2.5, cr: 1 };
+
+// ===========================
 // SCORING DEFINITIONS
 // ===========================
 

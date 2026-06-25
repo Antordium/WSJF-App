@@ -1,4 +1,5 @@
 import { initializeApp, getApps } from 'firebase/app';
+import { getAuth, signInAnonymously, type Auth } from 'firebase/auth';
 import {
   getDatabase,
   ref,
@@ -47,6 +48,32 @@ function getDb() {
 }
 
 // ===========================
+// ANONYMOUS AUTH
+// ===========================
+// All writes require an authenticated (anonymous) user so the database rules can
+// gate writes on `auth != null`. Reads stay public per the rules. The sign-in
+// promise is cached so we only authenticate once per session.
+
+let authReady: Promise<void> | null = null;
+
+export function ensureAuth(): Promise<void> {
+  if (typeof window === 'undefined') return Promise.resolve();
+  if (!authReady) {
+    const auth: Auth = getAuth(getFirebaseApp());
+    authReady = auth.currentUser
+      ? Promise.resolve()
+      : signInAnonymously(auth)
+          .then(() => {})
+          .catch((e) => {
+            // Allow a retry on the next call if sign-in failed (e.g. transient/offline).
+            authReady = null;
+            throw e;
+          });
+  }
+  return authReady;
+}
+
+// ===========================
 // SESSION MANAGEMENT
 // ===========================
 
@@ -55,6 +82,7 @@ export async function createSession(
   features: Omit<Feature, 'id' | 'order' | 'votingOpen' | 'tc' | 'rr' | 'cr' | 'sprints'>[],
   adminPin: string,
 ): Promise<string> {
+  await ensureAuth();
   const db = getDb();
   const sessionsRef = ref(db, 'sessions');
   const newSessionRef = push(sessionsRef);
@@ -115,11 +143,13 @@ export async function verifyAdminPin(sessionId: string, pin: string): Promise<bo
 // ===========================
 
 export async function setSessionStatus(sessionId: string, status: SessionStatus) {
+  await ensureAuth();
   const db = getDb();
   await update(ref(db, `sessions/${sessionId}/meta`), { status });
 }
 
 export async function advanceFeature(sessionId: string, nextIndex: number) {
+  await ensureAuth();
   const db = getDb();
   await update(ref(db, `sessions/${sessionId}/meta`), {
     currentFeatureIndex: nextIndex,
@@ -127,10 +157,22 @@ export async function advanceFeature(sessionId: string, nextIndex: number) {
 }
 
 export async function setFeatureVotingOpen(sessionId: string, featureId: string, open: boolean) {
+  await ensureAuth();
   const db = getDb();
   await update(ref(db, `sessions/${sessionId}/features/${featureId}`), {
     votingOpen: open,
   });
+}
+
+// Persist the scoring configuration (weights + sprint alpha) used to produce the
+// current results, so the ranking is reproducible/auditable.
+export async function saveScoringConfig(
+  sessionId: string,
+  config: { weights: { bv: number; tc: number; rr: number; cr: number }; alpha: number },
+) {
+  await ensureAuth();
+  const db = getDb();
+  await update(ref(db, `sessions/${sessionId}/meta`), { scoringConfig: config });
 }
 
 // ===========================
@@ -141,6 +183,7 @@ export async function joinSession(
   sessionId: string,
   profile: Omit<VoterProfile, 'id' | 'joinedAt'>,
 ): Promise<string> {
+  await ensureAuth();
   const db = getDb();
   const votersRef = ref(db, `sessions/${sessionId}/voters`);
   const newVoterRef = push(votersRef);
@@ -167,6 +210,7 @@ export async function submitVote(
   bv: number,
   tc: number,
 ) {
+  await ensureAuth();
   const db = getDb();
   const voteRef = ref(db, `sessions/${sessionId}/votes/${featureId}/${voterId}`);
   const featureVote: FeatureVote = {
@@ -189,6 +233,7 @@ export async function updateFeatureScores(
   sprints: number,
   tc?: number,
 ) {
+  await ensureAuth();
   const db = getDb();
   const updates: Record<string, number> = { rr, cr, sprints };
   if (tc !== undefined) updates.tc = tc;
@@ -204,6 +249,7 @@ export async function resetUserFeatureVoting(
   userFeatureIds: string[],
   firstUserFeatureIndex: number,
 ) {
+  await ensureAuth();
   const db = getDb();
 
   // Remove votes for user-facing features only
@@ -250,6 +296,7 @@ export async function mergeSessions(
   title: string,
   adminPin: string,
 ): Promise<string> {
+  await ensureAuth();
   const db = getDb();
 
   // Read both sessions
@@ -343,6 +390,7 @@ export async function saveResults(
   sessionId: string,
   results: Record<string, FeatureResult>,
 ) {
+  await ensureAuth();
   const db = getDb();
   await set(ref(db, `sessions/${sessionId}/results`), results);
 }
